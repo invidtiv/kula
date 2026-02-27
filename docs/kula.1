@@ -1,0 +1,40 @@
+.TH KULA 1 "February 2026" "kula" "User Manuals"
+.SH NAME
+kula \- lightweight system monitoring daemon
+.SH SYNOPSIS
+.B kula
+[\fIOPTIONS\fR] [\fICOMMAND\fR]
+.SH DESCRIPTION
+.B kula
+(Kula-Szpiegula) is a fast, lightweight system monitoring daemon written in Go.
+It collects system metrics (CPU, memory, disk, network) and provides a web interface
+and a local terminal UI (TUI) for visualization.
+.SH COMMANDS
+If no command is specified, \fBserve\fR is used by default.
+.TP
+.B serve
+Starts the data collection daemon and web server.
+.TP
+.B tui
+Starts the local Terminal User Interface (TUI) monitor.
+.TP
+.B hash-password
+Generates a bcrypt hash of a password, suitable for use in the configuration file.
+.SH OPTIONS
+.TP
+\fB\-\-config\fR \fCFILE\fP
+Path to the configuration file (default: config.yaml).
+.TP
+\fB\-\-help\fR
+Show the help message and exit.
+.SH FILES
+.TP
+.I /etc/kula/config.yaml
+Default system-wide configuration file.
+.TP
+.I /var/lib/kula
+Default directory for persistent data storage.
+.SH AUTHORS
+Written by c0m4r.
+.SH WEBSITE
+https://github.com/c0m4r/kula
