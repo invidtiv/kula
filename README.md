@@ -2,6 +2,8 @@
 
 A standalone, self-contained server monitoring tool written in Go. No external databases — it uses an embedded tiered binary storage engine. Provides both a terminal-based TUI for live overview and a premium Web UI with detailed graphs and history.
 
+<img width="1214" height="838" alt="image" src="https://github.com/user-attachments/assets/ce32e416-5a67-4d0a-bff1-d8fb6dcfd806" />
+
 ## Architecture
 
 ```
