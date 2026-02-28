@@ -63,9 +63,9 @@ Kula-Szpiegula collects system metrics every second by reading directly from `/p
 
 Data is persisted in **pre-allocated ring-buffer files** per tier. Each tier file has a fixed maximum size — when it fills up, new data overwrites the oldest entries. This gives predictable, bounded disk usage with no cleanup needed.
 
-- **Tier 1** — Raw 1-second samples (default 100 MB)
-- **Tier 2** — 1-minute aggregates: averaged CPU & network, last-value gauges (default 200 MB)
-- **Tier 3** — 5-minute aggregates, same logic (default 200 MB)
+- **Tier 1** — Raw 1-second samples (default 250 MB)
+- **Tier 2** — 1-minute aggregates: averaged CPU & network, last-value gauges (default 150 MB)
+- **Tier 3** — 5-minute aggregates, same logic (default 50 MB)
 
 ### Web Backend
 
