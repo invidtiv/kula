@@ -31,15 +31,15 @@ const (
 )
 
 type Tier struct {
-	mu        sync.RWMutex
-	file      *os.File
-	path      string
-	maxData   int64
-	writeOff  int64
-	count     uint64
-	oldestTS  time.Time
-	newestTS  time.Time
-	wrapped   bool
+	mu       sync.RWMutex
+	file     *os.File
+	path     string
+	maxData  int64
+	writeOff int64
+	count    uint64
+	oldestTS time.Time
+	newestTS time.Time
+	wrapped  bool
 }
 
 func OpenTier(path string, maxSize int64) (*Tier, error) {
@@ -304,4 +304,25 @@ func (t *Tier) Flush() error {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 	return t.writeHeader()
+}
+
+// OldestTimestamp returns the oldest sample timestamp in this tier.
+func (t *Tier) OldestTimestamp() time.Time {
+	t.mu.RLock()
+	defer t.mu.RUnlock()
+	return t.oldestTS
+}
+
+// NewestTimestamp returns the newest sample timestamp in this tier.
+func (t *Tier) NewestTimestamp() time.Time {
+	t.mu.RLock()
+	defer t.mu.RUnlock()
+	return t.newestTS
+}
+
+// Count returns the total number of records written to this tier.
+func (t *Tier) Count() uint64 {
+	t.mu.RLock()
+	defer t.mu.RUnlock()
+	return t.count
 }

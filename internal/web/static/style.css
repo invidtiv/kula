@@ -658,12 +658,38 @@ body {
 
 /* ---- Footer ---- */
 .sys-footer {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
     padding: 0.75rem 1.5rem;
     border-top: 1px solid var(--border-color);
     font-size: 0.75rem;
     color: var(--text-muted);
     font-family: var(--font-mono);
 }
+
+.footer-links a {
+    color: var(--text-muted);
+    text-decoration: none;
+    transition: color 0.15s;
+}
+
+.footer-links a:hover {
+    color: var(--accent-blue);
+}
+
+.sampling-info {
+    margin-left: 0.75rem;
+    padding: 0.15rem 0.5rem;
+    background: rgba(59, 130, 246, 0.12);
+    border: 1px solid rgba(59, 130, 246, 0.25);
+    border-radius: 100px;
+    font-size: 0.7rem;
+    color: var(--accent-cyan);
+}
+
+.clock-synced { color: var(--accent-green); }
+.clock-not-synced { color: var(--accent-red); }
 
 /* ---- Responsive ---- */
 @media (max-width: 1400px) {

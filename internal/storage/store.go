@@ -12,10 +12,10 @@ import (
 
 // Store manages the tiered storage system.
 type Store struct {
-	mu         sync.RWMutex
-	tiers      []*Tier
-	configs    []config.TierConfig
-	dir        string
+	mu      sync.RWMutex
+	tiers   []*Tier
+	configs []config.TierConfig
+	dir     string
 
 	// Aggregation state
 	tier1Count int
@@ -96,27 +96,80 @@ func (s *Store) WriteSample(sample *collector.Sample) error {
 	return nil
 }
 
+// HistoryResult wraps query results with tier metadata for the API.
+type HistoryResult struct {
+	Samples    []*AggregatedSample `json:"samples"`
+	Tier       int                 `json:"tier"`
+	Resolution string              `json:"resolution"`
+}
+
 // QueryRange returns samples for a time range, choosing the best tier.
 func (s *Store) QueryRange(from, to time.Time) ([]*AggregatedSample, error) {
+	result, err := s.QueryRangeWithMeta(from, to)
+	if err != nil {
+		return nil, err
+	}
+	return result.Samples, nil
+}
+
+// QueryRangeWithMeta returns samples with tier metadata.
+// It tries the highest-resolution tier first and falls back to lower tiers
+// when the estimated sample count would exceed maxSamples, or when the tier
+// doesn't have data covering the requested range.
+func (s *Store) QueryRangeWithMeta(from, to time.Time) (*HistoryResult, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
+	if len(s.tiers) == 0 {
+		return &HistoryResult{}, nil
+	}
+
+	const maxSamples = 3600
+
+	resolutions := []string{"1s", "1m", "5m"}
+	resDurations := []time.Duration{time.Second, time.Minute, 5 * time.Minute}
 	duration := to.Sub(from)
 
-	// Choose tier based on requested time range
-	tierIdx := 0
-	if duration > 30*time.Minute && len(s.tiers) > 1 {
-		tierIdx = 1
-	}
-	if duration > 6*time.Hour && len(s.tiers) > 2 {
-		tierIdx = 2
+	// Try each tier from highest to lowest resolution
+	for tierIdx := 0; tierIdx < len(s.tiers); tierIdx++ {
+		// Estimate sample count for this tier
+		resDur := time.Second
+		if tierIdx < len(resDurations) {
+			resDur = resDurations[tierIdx]
+		}
+		estimatedSamples := int(duration / resDur)
+
+		// Skip this tier if it would produce too many samples
+		// (unless it's the last tier — always use it as fallback)
+		if estimatedSamples > maxSamples && tierIdx < len(s.tiers)-1 {
+			continue
+		}
+
+		tier := s.tiers[tierIdx]
+		oldest := tier.OldestTimestamp()
+
+		// If this tier has data covering (or partially covering) the requested range, use it
+		if tier.Count() > 0 && !oldest.After(to) {
+			samples, err := tier.ReadRange(from, to)
+			if err != nil {
+				return nil, fmt.Errorf("reading tier %d: %w", tierIdx, err)
+			}
+			if len(samples) > 0 {
+				res := "1s"
+				if tierIdx < len(resolutions) {
+					res = resolutions[tierIdx]
+				}
+				return &HistoryResult{
+					Samples:    samples,
+					Tier:       tierIdx,
+					Resolution: res,
+				}, nil
+			}
+		}
 	}
 
-	if tierIdx >= len(s.tiers) {
-		tierIdx = len(s.tiers) - 1
-	}
-
-	return s.tiers[tierIdx].ReadRange(from, to)
+	// No data found in any tier
+	return &HistoryResult{Tier: 0, Resolution: resolutions[0]}, nil
 }
 
 // QueryLatest returns the latest sample from tier 1.

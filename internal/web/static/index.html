@@ -1,18 +1,24 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Kula-Szpiegula – Server Monitor</title>
-    <meta name="description" content="Lightweight Linux server monitoring dashboard with live metrics, CPU, memory, network, and disk graphs.">
+    <meta name="description"
+        content="Lightweight Linux server monitoring dashboard with live metrics, CPU, memory, network, and disk graphs.">
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+    <link
+        href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap"
+        rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.7/dist/chart.umd.min.js"></script>
-    <script src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns@3.0.0/dist/chartjs-adapter-date-fns.bundle.min.js"></script>
+    <script
+        src="https://cdn.jsdelivr.net/npm/chartjs-adapter-date-fns@3.0.0/dist/chartjs-adapter-date-fns.bundle.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-zoom@2.2.0/dist/chartjs-plugin-zoom.min.js"></script>
     <link rel="stylesheet" href="style.css">
 </head>
+
 <body>
     <!-- Login overlay -->
     <div id="login-overlay" class="login-overlay hidden">
@@ -34,7 +40,9 @@
         <!-- Header -->
         <header class="header">
             <div class="header-left">
-                <a href="/" class="header-link"><span class="logo">🔮</span><h1>Kula-Szpiegula</h1></a>
+                <a href="/" class="header-link"><span class="logo">🔮</span>
+                    <h1>Kula-Szpiegula</h1>
+                </a>
                 <span id="hostname" class="hostname"></span>
             </div>
             <div class="header-right">
@@ -99,15 +107,18 @@
         <!-- Time controls -->
         <section class="time-controls">
             <div class="time-presets">
+                <button class="time-btn" data-range="60">1m</button>
                 <button class="time-btn active" data-range="300">5m</button>
                 <button class="time-btn" data-range="900">15m</button>
                 <button class="time-btn" data-range="1800">30m</button>
                 <button class="time-btn" data-range="3600">1h</button>
                 <button class="time-btn" data-range="10800">3h</button>
                 <button class="time-btn" data-range="21600">6h</button>
+                <button class="time-btn" data-range="43200">12h</button>
                 <button class="time-btn" data-range="86400">24h</button>
                 <button class="time-btn" data-range="259200">3d</button>
                 <button class="time-btn" data-range="604800">7d</button>
+                <button class="time-btn" data-range="2592000">30d</button>
                 <span class="time-divider">│</span>
                 <button class="time-btn" id="btn-custom-range" title="Custom range">📅</button>
             </div>
@@ -119,6 +130,7 @@
             </div>
             <div class="time-info">
                 <span id="time-range-display">Last 5 minutes</span>
+                <span id="sampling-info" class="sampling-info"></span>
             </div>
         </section>
 
@@ -228,9 +240,12 @@
         <!-- System info footer -->
         <footer class="sys-footer">
             <div id="sys-info"></div>
+            <div class="footer-links"><a href="https://github.com/c0m4r/kula" target="_blank"
+                    rel="noopener noreferrer">GitHub</a></div>
         </footer>
     </div>
 
     <script src="app.js"></script>
 </body>
+
 </html>

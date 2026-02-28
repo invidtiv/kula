@@ -128,14 +128,14 @@ func (s *Server) handleHistory(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	samples, err := s.store.QueryRange(from, to)
+	result, err := s.store.QueryRangeWithMeta(from, to)
 	if err != nil {
 		http.Error(w, fmt.Sprintf(`{"error":"%s"}`, err), http.StatusInternalServerError)
 		return
 	}
 
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(samples)
+	json.NewEncoder(w).Encode(result)
 }
 
 func (s *Server) handleConfig(w http.ResponseWriter, r *http.Request) {

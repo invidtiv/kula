@@ -629,6 +629,33 @@
             });
         }
 
+        // CPU usage > 95%
+        if (sample.cpu?.total?.usage > 95) {
+            alerts.push({
+                icon: '🔥',
+                title: 'High CPU usage',
+                detail: `CPU: ${sample.cpu.total.usage.toFixed(1)}%`,
+            });
+        }
+
+        // RAM usage > 95%
+        if (sample.mem?.used_pct > 95) {
+            alerts.push({
+                icon: '💾',
+                title: 'High memory usage',
+                detail: `RAM: ${sample.mem.used_pct.toFixed(1)}%`,
+            });
+        }
+
+        // SWAP usage > 95%
+        if (sample.swap?.used_pct > 95) {
+            alerts.push({
+                icon: '💾',
+                title: 'High swap usage',
+                detail: `Swap: ${sample.swap.used_pct.toFixed(1)}%`,
+            });
+        }
+
         state.alerts = alerts;
         updateAlertUI();
     }
@@ -682,14 +709,19 @@
         if (s.sys?.uptime_human) el('uptime').textContent = '⏱ ' + s.sys.uptime_human;
         el('clock').textContent = new Date(s.ts).toLocaleTimeString();
 
-        // System info footer
+        // System info footer — with colored clock sync
         const sysInfo = [];
-        if (s.sys?.clock_synced !== undefined) sysInfo.push('clock: ' + (s.sys.clock_synced ? '✓ synced' : '✗ not synced'));
+        if (s.sys?.clock_synced !== undefined) {
+            const synced = s.sys.clock_synced;
+            const cls = synced ? 'clock-synced' : 'clock-not-synced';
+            const label = synced ? '✓ synced' : '✗ not synced';
+            sysInfo.push(`clock: <span class="${cls}">${label}</span>`);
+        }
         if (s.sys?.clock_source) sysInfo.push('source: ' + s.sys.clock_source);
         if (s.sys?.entropy) sysInfo.push('entropy: ' + s.sys.entropy);
         if (s.sys?.user_count !== undefined) sysInfo.push('users: ' + s.sys.user_count);
         if (s.self) sysInfo.push('self: ' + s.self.cpu_pct.toFixed(1) + '% cpu, ' + formatBytesShort(s.self.mem_rss) + ' rss');
-        el('sys-info').textContent = sysInfo.join('  │  ');
+        el('sys-info').innerHTML = sysInfo.join('  │  ');
     }
 
     function updateSubtitles(s) {
@@ -885,14 +917,22 @@
         document.getElementById('btn-custom-range')?.classList.remove('active');
 
         const labels = {
-            300: 'Last 5 minutes', 900: 'Last 15 minutes', 1800: 'Last 30 minutes',
-            3600: 'Last 1 hour', 10800: 'Last 3 hours', 21600: 'Last 6 hours',
-            86400: 'Last 24 hours', 259200: 'Last 3 days', 604800: 'Last 7 days'
+            60: 'Last 1 minute', 300: 'Last 5 minutes', 900: 'Last 15 minutes', 1800: 'Last 30 minutes',
+            3600: 'Last 1 hour', 10800: 'Last 3 hours', 21600: 'Last 6 hours', 43200: 'Last 12 hours',
+            86400: 'Last 24 hours', 259200: 'Last 3 days', 604800: 'Last 7 days', 2592000: 'Last 30 days'
         };
         document.getElementById('time-range-display').textContent = labels[seconds] || `Last ${seconds}s`;
 
         resetZoomAll();
         fetchHistory(seconds);
+    }
+
+    function updateSamplingInfo(tier, resolution) {
+        const el = document.getElementById('sampling-info');
+        if (!el) return;
+        const tierNames = ['Tier 1 (raw)', 'Tier 2 (1min avg)', 'Tier 3 (5min avg)'];
+        const name = tierNames[tier] || `Tier ${tier + 1}`;
+        el.textContent = `${resolution} samples · ${name}`;
     }
 
     function fetchHistory(rangeSeconds) {
@@ -903,9 +943,15 @@
         const from = new Date(Date.now() - rangeSeconds * 1000).toISOString();
         fetch(`/api/history?from=${from}&to=${to}`)
             .then(r => r.json())
-            .then(data => {
+            .then(response => {
+                const data = response.samples || response;
+                const isEnvelope = response.samples !== undefined;
+
+                if (isEnvelope) {
+                    updateSamplingInfo(response.tier, response.resolution);
+                }
+
                 if (!Array.isArray(data) || data.length === 0) {
-                    // Even with no data, set the time bounds so charts show empty regions
                     clearAllChartData();
                     state.dataBuffer = [];
                     setChartTimeRange();
@@ -965,7 +1011,14 @@
         const to = toDate.toISOString();
         fetch(`/api/history?from=${from}&to=${to}`)
             .then(r => r.json())
-            .then(data => {
+            .then(response => {
+                const data = response.samples || response;
+                const isEnvelope = response.samples !== undefined;
+
+                if (isEnvelope) {
+                    updateSamplingInfo(response.tier, response.resolution);
+                }
+
                 clearAllChartData();
                 state.dataBuffer = [];
 
