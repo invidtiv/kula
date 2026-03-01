@@ -7,7 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 Types of changes: Added, Changed, Deprecated, Removed, Fixed, Security
 
-## [0.4.1-beta] - 2026-03-01
+## [0.4.1-beta] - 2026-03-02
 
 ### Fixed
 
@@ -19,6 +19,8 @@ Types of changes: Added, Changed, Deprecated, Removed, Fixed, Security
 - Added strict absolute path validation to prevent directory traversal in storage config
 - Replaced silent parsing in `/proc` collectors with safe wrappers that explicitly log malformed data
 - Updated daemon to gracefully shut down open network listeners using `context.Context` signal catching
+- Migrated WebSocket handler from deprecated `golang.org/x/net/websocket` to `github.com/gorilla/websocket`
+- Added strict `Origin` validation to prevent Cross-Site WebSocket Hijacking (CSWSH)
 
 ## [0.4.0] - 2026-03-01
 

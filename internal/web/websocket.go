@@ -7,7 +7,7 @@ import (
 	"sync"
 	"time"
 
-	"golang.org/x/net/websocket"
+	"github.com/gorilla/websocket"
 )
 
 type wsClient struct {
@@ -17,65 +17,123 @@ type wsClient struct {
 	mu     sync.Mutex
 }
 
+var upgrader = websocket.Upgrader{
+	ReadBufferSize:  1024,
+	WriteBufferSize: 1024,
+	CheckOrigin: func(r *http.Request) bool {
+		// Strict origin check to prevent Cross-Site WebSocket Hijacking (CSWSH)
+		origin := r.Header.Get("Origin")
+		if origin == "" {
+			return true // Allow non-browser clients (like CLI tools) to connect
+		}
+
+		// Require the origin host to match the request host exactly
+		// Parses the host and ignores scheme (http vs https)
+		originHost := ""
+		for i := 0; i < len(origin); i++ {
+			if origin[i] == ':' && i+2 < len(origin) && origin[i+1] == '/' && origin[i+2] == '/' {
+				originHost = origin[i+3:]
+				break
+			}
+		}
+
+		if originHost == "" {
+			return false
+		}
+
+		if originHost != r.Host {
+			log.Printf("WebSocket upgrade blocked: Origin (%s) does not match Host (%s)", originHost, r.Host)
+			return false
+		}
+
+		return true
+	},
+}
+
 func (s *Server) handleWebSocket(w http.ResponseWriter, r *http.Request) {
-	wsHandler := websocket.Handler(func(conn *websocket.Conn) {
-		conn.MaxPayloadBytes = 4096 // Limit message size to prevent memory exhaustion
+	conn, err := upgrader.Upgrade(w, r, nil)
+	if err != nil {
+		log.Printf("WebSocket upgrade error: %v", err)
+		return
+	}
 
-		client := &wsClient{
-			conn:   conn,
-			sendCh: make(chan []byte, 64),
+	conn.SetReadLimit(4096) // Limit incoming JSON commands to prevent memory exhaustion
+
+	client := &wsClient{
+		conn:   conn,
+		sendCh: make(chan []byte, 64),
+	}
+
+	s.hub.regCh <- client
+	defer func() {
+		s.hub.unregCh <- client
+		_ = conn.Close()
+	}()
+
+	// Send initial current data
+	if sample := s.collector.Latest(); sample != nil {
+		data, err := json.Marshal(sample)
+		if err == nil {
+			_ = conn.WriteMessage(websocket.TextMessage, data)
 		}
+	}
 
-		s.hub.regCh <- client
-		defer func() {
-			s.hub.unregCh <- client
-			_ = conn.Close()
-		}()
+	// Read pump (for pause/resume commands)
+	go func() {
+		// Set an initial read deadline
+		_ = conn.SetReadDeadline(time.Now().Add(60 * time.Second))
+		conn.SetPongHandler(func(string) error {
+			_ = conn.SetReadDeadline(time.Now().Add(60 * time.Second))
+			return nil
+		})
 
-		// Send initial current data
-		if sample := s.collector.Latest(); sample != nil {
-			data, err := json.Marshal(sample)
-			if err == nil {
-				_ = websocket.Message.Send(conn, string(data))
+		for {
+			var cmd struct {
+				Action string `json:"action"`
 			}
+			err := conn.ReadJSON(&cmd)
+			if err != nil {
+				if websocket.IsUnexpectedCloseError(err, websocket.CloseGoingAway, websocket.CloseAbnormalClosure) {
+					log.Printf("WebSocket read unexpected error: %v", err)
+				}
+				s.hub.unregCh <- client
+				return
+			}
+
+			client.mu.Lock()
+			switch cmd.Action {
+			case "pause":
+				client.paused = true
+			case "resume":
+				client.paused = false
+			}
+			client.mu.Unlock()
 		}
+	}()
 
-		// Read pump (for pause/resume commands)
-		go func() {
-			for {
-				var msg string
-				if err := websocket.Message.Receive(conn, &msg); err != nil {
-					s.hub.unregCh <- client
-					return
-				}
+	// Write pump
+	ticker := time.NewTicker(50 * time.Second) // Must be less than read deadline
+	defer ticker.Stop()
 
-				var cmd struct {
-					Action string `json:"action"`
-				}
-				if err := json.Unmarshal([]byte(msg), &cmd); err != nil {
-					continue
-				}
-
-				client.mu.Lock()
-				switch cmd.Action {
-				case "pause":
-					client.paused = true
-				case "resume":
-					client.paused = false
-				}
-				client.mu.Unlock()
-			}
-		}()
-
-		// Write pump
-		for data := range client.sendCh {
+	for {
+		select {
+		case data, ok := <-client.sendCh:
 			_ = conn.SetWriteDeadline(time.Now().Add(10 * time.Second))
-			if err := websocket.Message.Send(conn, string(data)); err != nil {
+			if !ok {
+				// The hub closed the channel
+				_ = conn.WriteMessage(websocket.CloseMessage, []byte{})
+				return
+			}
+
+			if err := conn.WriteMessage(websocket.TextMessage, data); err != nil {
 				log.Printf("WebSocket write error: %v", err)
 				return
 			}
+		case <-ticker.C:
+			_ = conn.SetWriteDeadline(time.Now().Add(10 * time.Second))
+			if err := conn.WriteMessage(websocket.PingMessage, nil); err != nil {
+				return
+			}
 		}
-	})
-
-	wsHandler.ServeHTTP(w, r)
+	}
 }
