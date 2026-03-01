@@ -28,6 +28,12 @@ web:
   # When false, gaps between measurements are displayed as empty space
   join_metrics: false
 
+  # API Access and Performance Logging
+  logging:
+    enabled: true
+    # "access" (basic request details) or "perf" (adds DB fetch metrics)
+    level: "perf"
+
   # Authentication (optional)
   auth:
     enabled: false

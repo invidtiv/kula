@@ -202,6 +202,9 @@ web:
   listen: "0.0.0.0"
   port: 8080
   join_metrics: false            # false = show gaps, true = connect lines
+  logging:
+    enabled: true
+    level: "perf"                # options: "access" or "perf"
   auth:
     enabled: false               # Enable login with Whirlpool-hashed password
 
