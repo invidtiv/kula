@@ -735,6 +735,11 @@ body {
     transition: color 0.15s;
 }
 
+.footer-sep {
+    color: var(--border-color);
+    margin: 0 0.5rem;
+}
+
 .footer-links a:hover {
     color: var(--accent-blue);
 }

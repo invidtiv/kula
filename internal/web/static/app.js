@@ -1295,6 +1295,10 @@
             .then(r => r.json())
             .then(cfg => {
                 if (cfg.join_metrics !== undefined) state.joinMetrics = cfg.join_metrics;
+                if (cfg.version) {
+                    const versionEl = document.getElementById('kula-version');
+                    if (versionEl) versionEl.textContent = 'v' + cfg.version;
+                }
             })
             .catch(() => { });
 
