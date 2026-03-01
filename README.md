@@ -135,15 +135,23 @@ docker compose -f addons/docker/docker-compose.yml up -d
 ## Usage
 
 ```
-kula [flags] [command]
+Usage:
+  kula [flags] [command]
 
 Commands:
-  serve          Start monitoring daemon with web UI (default)
-  tui            Launch terminal dashboard
-  hash-password  Generate password hash for config
+  serve          Start the monitoring daemon with web UI (default)
+  tui            Launch the terminal UI dashboard
+  hash-password  Generate an Argon2 password hash for config
 
 Flags:
-  -config string  Path to config file (default "config.yaml")
+  -config string  Path to configuration file (default "config.yaml")
+  -h, --help      Show this help message
+
+Examples:
+  kula                              Start with default config
+  kula -config /etc/kula/config.yaml serve
+  kula tui
+  kula hash-password
 ```
 
 ### Quick Start
@@ -192,32 +200,6 @@ sudo ln -s /etc/sv/kula /var/service/
 ## Configuration
 
 All settings live in `config.yaml`. See [`config.example.yaml`](config.example.yaml) for defaults.
-
-```yaml
-collection:
-  interval: 1s                   # How often to collect metrics
-
-web:
-  enabled: true
-  listen: "0.0.0.0"
-  port: 8080
-  join_metrics: false            # false = show gaps, true = connect lines
-  logging:
-    enabled: true
-    level: "perf"                # options: "access" or "perf"
-  auth:
-    enabled: false               # Enable login with Argon2id-hashed password
-
-storage:
-  directory: ./data
-  tiers:
-    - resolution: 1s
-      max_size: 250MB            # Ring-buffer size per tier
-    - resolution: 1m
-      max_size: 150MB
-    - resolution: 5m
-      max_size: 50MB
-```
 
 ---
 
@@ -271,17 +253,18 @@ kula/
 ## Development
 
 ```bash
-# Run tests
-go test -v -race ./...
-
 # Lint + test suite
-bash addons/check.sh
+bash ./addons/check.sh
 
-# Build
-go build -o kula ./cmd/kula/
+# Build dev (Binary size: ~11MB)
+CGO_ENABLED=0 go build -o kula ./cmd/kula/
+
+# Build prod (Binary size: ~8MB)
+CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -buildvcs=false -o kula ./cmd/kula/
+
 ```
 
-Binary size: ~11 MB (static, CGO_ENABLED=0)
+Binary size: ~7 MB (static, CGO_ENABLED=0)
 
 ---
 
