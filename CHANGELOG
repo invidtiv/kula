@@ -33,6 +33,10 @@ Types of changes: Added, Changed, Deprecated, Removed, Fixed, Security
 - Added missing upper bounds checks against abusive 31+ day historical queries
 - Masked password with asterisks in the hash-password mode
 
+### Removed
+
+- Whirlpool password hashing algorithm
+
 ## [0.3.1] - 2026-02-28
 
 ### Changed
