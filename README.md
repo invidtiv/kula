@@ -264,8 +264,6 @@ CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -buildvcs=false -o kula ./cmd/
 
 ```
 
-Binary size: ~7 MB (static, CGO_ENABLED=0)
-
 ---
 
 ## License
