@@ -10,22 +10,24 @@ VERSION_FILE="${PROJECT_ROOT}/VERSION"
 if [ -f "${VERSION_FILE}" ]; then
     VERSION="$(head -1 "${VERSION_FILE}" | tr -d '[:space:]')"
 else
-    echo "Warning: VERSION file not found, using default 0.1.0"
-    VERSION="0.1.0"
+    VERSION="0.4.2"
+    echo "Warning: VERSION file not found, using default ${VERSION}"
 fi
 
 PKG_NAME="kula"
-AUR_DIR="aur"
+AUR_DIR="dist/aur"
 
 # Choose between local and remote installation
 echo "Select installation source:"
 echo "  1) Local build (from current source checkout)"
-echo "  2) Remote (GitHub release tarball)"
+echo "  2) Remote (GitHub release tarball) - NOT IMPLEMENTED YET"
 read -rp "Choice [1]: " SOURCE_CHOICE
 SOURCE_CHOICE="${SOURCE_CHOICE:-1}"
 
 echo "Creating AUR directory structure..."
 mkdir -p "${AUR_DIR}"
+
+### TODO: add checksum verification
 
 if [ "${SOURCE_CHOICE}" = "2" ]; then
     GITHUB_URL="https://github.com/c0m4r/kula"
@@ -56,6 +58,9 @@ package() {
   # Install binary
   install -Dm755 kula "\$pkgdir/usr/bin/kula"
 
+  # Install systemd service
+  install -Dm644 addons/init/systemd/kula.service "\$pkgdir/usr/lib/systemd/system/kula.service"
+
   # Install example config
   install -Dm644 config.example.yaml "\$pkgdir/etc/kula/config.example.yaml"
 
@@ -67,6 +72,13 @@ package() {
 
   # Install man page
   install -Dm644 docs/kula.1 "\$pkgdir/usr/share/man/man1/kula.1"
+
+  # Install documentation
+  for f in CHANGELOG VERSION README.md SECURITY.md LICENSE config.example.yaml; do
+      if [ -f "\$f" ]; then
+          install -Dm644 "\$f" "\$pkgdir/usr/share/kula/\$f"
+      fi
+  done
 }
 EOF
 else
@@ -87,17 +99,20 @@ sha256sums=()
 install='kula.install'
 
 build() {
-  cd "$srcdir/../../" # Go back to repo root from srcdir
+  cd "$srcdir/../../.." # Go back to repo root from srcdir
   export CGO_ENABLED=0
   go build -o kula ./cmd/kula/
 }
 
 package() {
-  cd "$srcdir/../../"
+  cd "$srcdir/../../.."
 
   # Install binary
   install -Dm755 kula "$pkgdir/usr/bin/kula"
   
+  # Install systemd service
+  install -Dm644 addons/init/systemd/kula.service "$pkgdir/usr/lib/systemd/system/kula.service"
+
   # Install example config
   install -Dm644 config.example.yaml "$pkgdir/etc/kula/config.example.yaml"
   
@@ -105,10 +120,17 @@ package() {
   install -dm755 "$pkgdir/var/lib/kula"
   
   # Install bash completion
-  install -Dm644 docs/kula-completion.bash "$pkgdir/usr/share/bash-completion/completions/kula"
+  install -Dm644 addons/bash-completion/kula "$pkgdir/usr/share/bash-completion/completions/kula"
 
   # Install man page
   install -Dm644 docs/kula.1 "$pkgdir/usr/share/man/man1/kula.1"
+
+  # Install documentation
+  for f in CHANGELOG VERSION README.md SECURITY.md LICENSE config.example.yaml; do
+      if [ -f "$f" ]; then
+          install -Dm644 "$f" "$pkgdir/usr/share/kula/$f"
+      fi
+  done
 }
 EOF
     # Replace version placeholder
@@ -117,11 +139,43 @@ fi
 
 cat << 'EOF' > "${AUR_DIR}/kula.install"
 post_install() {
+    # Create kula group if it doesn't exist
+    if ! getent group kula >/dev/null; then
+        groupadd --system kula
+    fi
+
+    # Create kula user if it doesn't exist
+    if ! getent passwd kula >/dev/null; then
+        useradd --system -g kula -d /var/lib/kula -s /bin/false -c "Kula System Monitoring Daemon" kula
+    fi
+
+    # Set ownership for directories the program will use
+    chown -R kula:kula /etc/kula
+    chown -R kula:kula /var/lib/kula
+
+    # Load systemd, enable and start service
+    if command -v systemctl >/dev/null; then
+        systemctl daemon-reload || true
+        systemctl enable kula.service || true
+        systemctl start kula.service || true
+    fi
+
     echo "Kula installed successfully!"
     echo "Default configuration is at /etc/kula/config.example.yaml"
     echo "To get started:"
     echo "  cp /etc/kula/config.example.yaml /etc/kula/config.yaml"
     echo "  kula serve"
+}
+
+post_upgrade() {
+    post_install
+}
+
+pre_remove() {
+    if command -v systemctl >/dev/null; then
+        systemctl stop kula.service || true
+        systemctl disable kula.service || true
+    fi
 }
 EOF
 
