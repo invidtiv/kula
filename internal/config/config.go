@@ -73,30 +73,12 @@ func isWritable(dir string) bool {
 }
 
 func DefaultConfig() *Config {
-	// Try /var/lib/kula first (typically requires root to create, but let's try)
-	dataDir := "/var/lib/kula"
-	if err := os.MkdirAll(dataDir, 0755); err != nil || !isWritable(dataDir) {
-		// Fallback to ~/.kula
-		homeDir, err := os.UserHomeDir()
-		if err == nil {
-			dataDir = filepath.Join(homeDir, ".kula")
-			log.Printf("Notice: Insufficient permissions for /var/lib/kula, falling back to %s", dataDir)
-			if err := os.MkdirAll(dataDir, 0755); err != nil || !isWritable(dataDir) {
-				fmt.Fprintf(os.Stderr, "Error: Insufficient permissions to create data storage in /var/lib/kula or %s\n", dataDir)
-				os.Exit(1)
-			}
-		} else {
-			fmt.Fprintf(os.Stderr, "Error: Insufficient permissions to create data storage in /var/lib/kula\n")
-			os.Exit(1)
-		}
-	}
-
 	return &Config{
 		Collection: CollectionConfig{
 			Interval: time.Second,
 		},
 		Storage: StorageConfig{
-			Directory: dataDir,
+			Directory: "/var/lib/kula",
 			Tiers: []TierConfig{
 				{Resolution: time.Second, MaxSize: "250MB"},
 				{Resolution: time.Minute, MaxSize: "150MB"},
@@ -127,6 +109,9 @@ func Load(path string) (*Config, error) {
 	data, err := os.ReadFile(path)
 	if err != nil {
 		if os.IsNotExist(err) {
+			if err := checkStorageDirectory(cfg); err != nil {
+				return nil, err
+			}
 			if err := cfg.parseMaxBytes(); err != nil {
 				return nil, err
 			}
@@ -146,11 +131,34 @@ func Load(path string) (*Config, error) {
 		}
 	}
 
+	if err := checkStorageDirectory(cfg); err != nil {
+		return nil, err
+	}
+
 	if err := cfg.parseMaxBytes(); err != nil {
 		return nil, err
 	}
 
 	return cfg, nil
+}
+
+func checkStorageDirectory(cfg *Config) error {
+	if cfg.Storage.Directory == "/var/lib/kula" {
+		if err := os.MkdirAll(cfg.Storage.Directory, 0755); err != nil || !isWritable(cfg.Storage.Directory) {
+			homeDir, err := os.UserHomeDir()
+			if err == nil {
+				fallbackDir := filepath.Join(homeDir, ".kula")
+				log.Printf("Notice: Insufficient permissions for /var/lib/kula, falling back to %s", fallbackDir)
+				if err := os.MkdirAll(fallbackDir, 0755); err != nil || !isWritable(fallbackDir) {
+					return fmt.Errorf("insufficient permissions to create data storage in /var/lib/kula or %s", fallbackDir)
+				}
+				cfg.Storage.Directory = fallbackDir
+			} else {
+				return fmt.Errorf("insufficient permissions to create data storage in /var/lib/kula: %w", err)
+			}
+		}
+	}
+	return nil
 }
 
 func (c *Config) parseMaxBytes() error {
