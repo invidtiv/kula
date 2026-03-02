@@ -301,4 +301,7 @@ CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -buildvcs=false -o kula ./cmd/
 
 [GNU Affero General Public License v3.0](LICENSE)
 
-Linux® is the registered trademark of Linus Torvalds in the U.S. and other countries.
+## Attributions
+
+- Linux® is the registered trademark of Linus Torvalds in the U.S. and other countries.
+- [Chart.js](https://www.chartjs.org/) library licensed under MIT

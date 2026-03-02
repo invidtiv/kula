@@ -13,6 +13,12 @@ Types of changes: Added, Changed, Deprecated, Removed, Fixed, Security
 
 - Dual-stack IPv4 and IPv6 support
 - Storage directory fallback in case of insufficient permissions
+- Chart.js static library
+
+### Changed
+
+- Logo / typography
+- Chart.js updated to 4.5.1
 
 ## [0.4.2] - 2026-03-02
 
