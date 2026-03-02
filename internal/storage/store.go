@@ -210,6 +210,7 @@ func (s *Store) Close() error {
 
 // aggregateSamples creates an aggregated sample from raw samples.
 // Uses the last sample's values (for gauges) and averages for rates.
+// Also tracks peak (maximum) values for CPU, disk utilisation, and network throughput.
 func (s *Store) aggregateSamples(samples []*collector.Sample, dur time.Duration) *AggregatedSample {
 	if len(samples) == 0 {
 		return nil
@@ -218,16 +219,43 @@ func (s *Store) aggregateSamples(samples []*collector.Sample, dur time.Duration)
 	// Use the last sample as the base (most gauges are "current value")
 	last := samples[len(samples)-1]
 
-	// Average CPU usage across the window
 	avg := *last
+
+	var peakCPU, peakDiskUtil, peakRx, peakTx float64
+
 	if len(samples) > 1 {
 		var totalCPU float64
 		for _, s := range samples {
 			totalCPU += s.CPU.Total.Usage
+			if s.CPU.Total.Usage > peakCPU {
+				peakCPU = s.CPU.Total.Usage
+			}
+
+			// Peak disk utilisation across all devices in this sample
+			for _, dev := range s.Disks.Devices {
+				if dev.Utilization > peakDiskUtil {
+					peakDiskUtil = dev.Utilization
+				}
+			}
+
+			// Peak network throughput (summed across non-loopback interfaces)
+			var rx, tx float64
+			for _, iface := range s.Network.Interfaces {
+				if iface.Name != "lo" {
+					rx += iface.RxMbps
+					tx += iface.TxMbps
+				}
+			}
+			if rx > peakRx {
+				peakRx = rx
+			}
+			if tx > peakTx {
+				peakTx = tx
+			}
 		}
 		avg.CPU.Total.Usage = totalCPU / float64(len(samples))
 
-		// Average network rates
+		// Average network rates per interface
 		for i := range avg.Network.Interfaces {
 			var rxSum, txSum float64
 			count := 0
@@ -245,12 +273,30 @@ func (s *Store) aggregateSamples(samples []*collector.Sample, dur time.Duration)
 				avg.Network.Interfaces[i].TxMbps = txSum / float64(count)
 			}
 		}
+	} else {
+		// Single sample — peaks equal the observed values
+		peakCPU = last.CPU.Total.Usage
+		for _, dev := range last.Disks.Devices {
+			if dev.Utilization > peakDiskUtil {
+				peakDiskUtil = dev.Utilization
+			}
+		}
+		for _, iface := range last.Network.Interfaces {
+			if iface.Name != "lo" {
+				peakRx += iface.RxMbps
+				peakTx += iface.TxMbps
+			}
+		}
 	}
 
 	return &AggregatedSample{
-		Timestamp: last.Timestamp,
-		Duration:  dur,
-		Data:      &avg,
+		Timestamp:    last.Timestamp,
+		Duration:     dur,
+		Data:         &avg,
+		PeakCPU:      &peakCPU,
+		PeakDiskUtil: &peakDiskUtil,
+		PeakRxMbps:   &peakRx,
+		PeakTxMbps:   &peakTx,
 	}
 }
 
@@ -265,5 +311,31 @@ func (s *Store) aggregateAggregated(samples []*AggregatedSample, dur time.Durati
 			raw = append(raw, s.Data)
 		}
 	}
-	return s.aggregateSamples(raw, dur)
+	result := s.aggregateSamples(raw, dur)
+	if result == nil {
+		return nil
+	}
+
+	// Peaks over sub-aggregated samples are the max of their own peak fields,
+	// which already captured the true maxima of their respective windows.
+	var peakCPU, peakDiskUtil, peakRx, peakTx float64
+	for _, s := range samples {
+		if s.PeakCPU != nil && *s.PeakCPU > peakCPU {
+			peakCPU = *s.PeakCPU
+		}
+		if s.PeakDiskUtil != nil && *s.PeakDiskUtil > peakDiskUtil {
+			peakDiskUtil = *s.PeakDiskUtil
+		}
+		if s.PeakRxMbps != nil && *s.PeakRxMbps > peakRx {
+			peakRx = *s.PeakRxMbps
+		}
+		if s.PeakTxMbps != nil && *s.PeakTxMbps > peakTx {
+			peakTx = *s.PeakTxMbps
+		}
+	}
+	result.PeakCPU = &peakCPU
+	result.PeakDiskUtil = &peakDiskUtil
+	result.PeakRxMbps = &peakRx
+	result.PeakTxMbps = &peakTx
+	return result
 }

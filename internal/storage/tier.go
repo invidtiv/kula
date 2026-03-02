@@ -169,8 +169,6 @@ func (t *Tier) Write(s *AggregatedSample) error {
 		t.writeOff = 0
 		t.wrapped = true
 	}
-
-	// Write length prefix
 	lenBuf := make([]byte, 4)
 	binary.LittleEndian.PutUint32(lenBuf, uint32(len(data)))
 
@@ -187,6 +185,16 @@ func (t *Tier) Write(s *AggregatedSample) error {
 	t.newestTS = s.Timestamp
 	if t.oldestTS.IsZero() {
 		t.oldestTS = s.Timestamp
+	}
+
+	// When the ring buffer has wrapped, oldestTS must track the actual oldest
+	// surviving record, which is the one now sitting at writeOff (the next
+	// slot we will overwrite). Refresh it on every write so that
+	// QueryRangeWithMeta always gets an accurate lower bound.
+	if t.wrapped {
+		if ts, err := t.readTimestampAt(t.writeOff % t.maxData); err == nil {
+			t.oldestTS = ts
+		}
 	}
 
 	// Update header periodically (every 10 writes to reduce I/O)
@@ -323,6 +331,25 @@ func (t *Tier) Flush() error {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 	return t.writeHeader()
+}
+
+// readTimestampAt reads the timestamp of the first record at the given data-region
+// offset. Returns an error if the record is invalid. Must be called under at least
+// a read lock (Write holds the write lock, which is sufficient).
+func (t *Tier) readTimestampAt(dataOffset int64) (time.Time, error) {
+	lenBuf := make([]byte, 4)
+	if _, err := t.file.ReadAt(lenBuf, headerSize+dataOffset); err != nil {
+		return time.Time{}, err
+	}
+	dataLen := binary.LittleEndian.Uint32(lenBuf)
+	if dataLen == 0 || int64(dataLen) > t.maxData {
+		return time.Time{}, fmt.Errorf("invalid record length %d at offset %d", dataLen, dataOffset)
+	}
+	data := make([]byte, dataLen)
+	if _, err := t.file.ReadAt(data, headerSize+dataOffset+4); err != nil {
+		return time.Time{}, err
+	}
+	return extractTimestamp(data)
 }
 
 // OldestTimestamp returns the oldest sample timestamp in this tier.

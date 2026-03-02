@@ -33,6 +33,8 @@
         focusSelecting: false,
         focusVisible: JSON.parse(localStorage.getItem('kula_focus_visible') || 'null'),
         currentResolution: '1s', // resolution of data currently loaded in charts
+        liveQueue: [],        // samples buffered while history is loading
+        diskDeviceNames: [],  // device names matching diskutil chart datasets
     };
 
     // ---- Color Palette ----
@@ -253,9 +255,10 @@
         });
 
         // Disk Utilization
-        state.charts.diskutil = createTimeSeriesChart('chart-disk-util', [
-            { label: 'Utilization', borderColor: colors.purple, backgroundColor: colors.purpleAlpha, fill: true, data: [] },
-        ], { max: 100, ticks: { callback: v => v + '%' } });
+        // Disk Utilization — datasets are added dynamically per device on first sample
+        state.diskDeviceNames = [];
+        state.charts.diskutil = createTimeSeriesChart('chart-disk-util', [],
+            { max: 100, ticks: { callback: v => v + '%' } });
 
         // Disk Space (bar chart)
         state.charts.diskspace = new Chart(document.getElementById('chart-disk-space'), {
@@ -407,11 +410,35 @@
             state.charts.diskio.data.datasets[1].data.push(point(wBps));
         }
 
-        // Disk Utilization (max across devices)
-        if (state.charts.diskutil && s.disk?.devices) {
-            let maxUtil = 0;
-            s.disk.devices.forEach(d => { if (d.util_pct > maxUtil) maxUtil = d.util_pct; });
-            state.charts.diskutil.data.datasets[0].data.push(point(maxUtil));
+        // Disk Utilization — one dataset per device, created dynamically
+        if (state.charts.diskutil && s.disk?.devices && s.disk.devices.length > 0) {
+            const diskColorPairs = [
+                [colors.purple, colors.purpleAlpha],
+                [colors.cyan, colors.cyanAlpha],
+                [colors.orange, colors.orangeAlpha],
+                [colors.green, colors.greenAlpha],
+                [colors.pink, colors.pinkAlpha],
+                [colors.yellow, colors.yellowAlpha],
+                [colors.blue, colors.blueAlpha],
+                [colors.teal, colors.tealAlpha],
+            ];
+            const incomingNames = s.disk.devices.map(d => d.name);
+            if (incomingNames.join(',') !== state.diskDeviceNames.join(',')) {
+                // Device set changed — rebuild datasets, preserving nothing
+                state.diskDeviceNames = incomingNames;
+                state.charts.diskutil.data.datasets = incomingNames.map((name, i) => ({
+                    label: name,
+                    borderColor: diskColorPairs[i % diskColorPairs.length][0],
+                    backgroundColor: diskColorPairs[i % diskColorPairs.length][1],
+                    fill: false,
+                    data: [],
+                }));
+            }
+            s.disk.devices.forEach((d, i) => {
+                if (i < state.charts.diskutil.data.datasets.length) {
+                    state.charts.diskutil.data.datasets[i].data.push(point(d.util_pct));
+                }
+            });
         }
 
         // Disk Space (update bar chart — overwrite, not append)
@@ -478,17 +505,24 @@
 
     function trimChartsToTimeRange() {
         if (state.timeRange === null) return; // custom range — don't trim
-        const cutoff = new Date(Date.now() - state.timeRange * 1000);
+        const cutoffMs = Date.now() - state.timeRange * 1000;
 
         Object.values(state.charts).forEach(chart => {
             if (!chart || !chart.data?.datasets) return;
             chart.data.datasets.forEach(ds => {
-                if (!Array.isArray(ds.data)) return;
-                while (ds.data.length > 0 && ds.data[0].x && ds.data[0].x < cutoff) {
-                    ds.data.shift();
-                }
+                if (!Array.isArray(ds.data) || ds.data.length === 0) return;
+                // Find the first index still within range, then splice once
+                let i = 0;
+                while (i < ds.data.length && ds.data[i].x && ds.data[i].x < cutoffMs) i++;
+                if (i > 0) ds.data.splice(0, i);
             });
         });
+
+        // Keep dataBuffer in sync with the displayed time window
+        const cutoffDate = new Date(cutoffMs);
+        let bi = 0;
+        while (bi < state.dataBuffer.length && new Date(state.dataBuffer[bi].ts) < cutoffDate) bi++;
+        if (bi > 0) state.dataBuffer.splice(0, bi);
     }
 
     function clearAllChartData() {
@@ -584,13 +618,30 @@
                     chart.update('none');
                 });
 
+                // Treat the zoomed window as a custom range so trimChartsToTimeRange
+                // leaves the data alone, and live samples arriving after this point
+                // won't clobber the viewport.
+                state.timeRange = null;
+                state.customFrom = fromDate;
+                state.customTo = toDate;
+
+                // The zoom is now "baked in" as a custom range — release zoom-pause
+                // so the WS stream resumes (new samples land outside the viewport
+                // and are ignored visually until the user resets zoom).
+                if (state.pausedZoom) {
+                    state.pausedZoom = false;
+                    syncPauseState();
+                }
+
                 state.loadingHistory = false;
                 document.getElementById('loading-spinner')?.classList.add('hidden');
+                drainLiveQueue();
             })
             .catch(e => {
                 console.error('Zoomed history fetch error:', e);
                 state.loadingHistory = false;
                 document.getElementById('loading-spinner')?.classList.add('hidden');
+                drainLiveQueue();
             });
     }
 
@@ -813,7 +864,16 @@
         };
 
         state.ws.onmessage = (evt) => {
-            if (state.loadingHistory) return; // skip live samples while loading history
+            if (state.loadingHistory) {
+                // Buffer samples that arrive while history is loading so there
+                // is no gap when live streaming resumes after the fetch.
+                try {
+                    const sample = JSON.parse(evt.data);
+                    state.liveQueue.push(sample);
+                    if (state.liveQueue.length > 120) state.liveQueue.shift(); // cap at 2 min
+                } catch (e) { /* ignore */ }
+                return;
+            }
             try {
                 const sample = JSON.parse(evt.data);
                 pushLiveSample(sample);
@@ -831,6 +891,14 @@
         state.ws.onerror = () => {
             state.ws.close();
         };
+    }
+
+    // Replay any samples that arrived while history was loading.
+    function drainLiveQueue() {
+        if (state.liveQueue.length === 0) return;
+        const queue = state.liveQueue;
+        state.liveQueue = [];
+        queue.forEach(sample => pushLiveSample(sample));
     }
 
     function scheduleReconnect() {
@@ -1000,11 +1068,13 @@
 
                 state.loadingHistory = false;
                 document.getElementById('loading-spinner')?.classList.add('hidden');
+                drainLiveQueue();
             })
             .catch(e => {
                 console.error('History fetch error:', e);
                 state.loadingHistory = false;
                 document.getElementById('loading-spinner')?.classList.add('hidden');
+                drainLiveQueue();
             });
     }
 
@@ -1058,11 +1128,13 @@
                 updateAllCharts();
                 state.loadingHistory = false;
                 document.getElementById('loading-spinner')?.classList.add('hidden');
+                drainLiveQueue();
             })
             .catch(e => {
                 console.error('Custom history fetch error:', e);
                 state.loadingHistory = false;
                 document.getElementById('loading-spinner')?.classList.add('hidden');
+                drainLiveQueue();
             });
     }
 
