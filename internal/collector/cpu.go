@@ -166,7 +166,7 @@ func collectMemory() MemoryStats {
 	}
 	mem.Used = mem.Total - mem.Free - mem.Buffers - mem.Cached - mem.SReclaimable
 	if mem.Total > 0 {
-		mem.UsedPercent = float64(mem.Used) / float64(mem.Total) * 100.0
+		mem.UsedPercent = round2(float64(mem.Used) / float64(mem.Total) * 100.0)
 	}
 	return mem
 }
@@ -180,7 +180,7 @@ func collectSwap() SwapStats {
 	}
 	s.Used = s.Total - s.Free
 	if s.Total > 0 {
-		s.UsedPercent = float64(s.Used) / float64(s.Total) * 100.0
+		s.UsedPercent = round2(float64(s.Used) / float64(s.Total) * 100.0)
 	}
 	return s
 }

@@ -116,7 +116,7 @@ func (c *Collector) collectDisks(elapsed float64) DiskStats {
 			dev.WriteBytesPS = float64(cur.writeSect-prev.writeSect) * 512.0 / elapsed
 
 			ioTimeDelta := float64(cur.ioTime - prev.ioTime)
-			dev.Utilization = ioTimeDelta / (elapsed * 1000.0) * 100.0
+			dev.Utilization = round2(ioTimeDelta / (elapsed * 1000.0) * 100.0)
 			if dev.Utilization > 100 {
 				dev.Utilization = 100
 			}
@@ -175,7 +175,7 @@ func collectFileSystems() []FileSystemInfo {
 
 		var usedPct float64
 		if total > 0 {
-			usedPct = float64(used) / float64(total) * 100.0
+			usedPct = round2(float64(used) / float64(total) * 100.0)
 		}
 
 		result = append(result, FileSystemInfo{
