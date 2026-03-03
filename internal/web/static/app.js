@@ -338,7 +338,8 @@
     }
 
     // ---- Data Update ----
-    function addSampleToCharts(s, ts) {
+    function addSampleToCharts(item, ts) {
+        const s = item.data || item;
         const point = (v) => ({ x: ts, y: v });
 
         // CPU
@@ -347,7 +348,10 @@
             state.charts.cpu.data.datasets[1].data.push(point(s.cpu.total.system));
             state.charts.cpu.data.datasets[2].data.push(point(s.cpu.total.iowait));
             state.charts.cpu.data.datasets[3].data.push(point(s.cpu.total.steal));
-            state.charts.cpu.data.datasets[4].data.push(point(s.cpu.total.usage));
+
+            // Show peak CPU for total usage to preserve spikes
+            const usageVal = item.peak_cpu !== undefined ? item.peak_cpu : s.cpu.total.usage;
+            state.charts.cpu.data.datasets[4].data.push(point(usageVal));
         }
 
         // Load Average
@@ -384,8 +388,12 @@
         if (state.charts.network && s.net?.ifaces) {
             let rx = 0, tx = 0;
             s.net.ifaces.forEach(i => { if (i.name !== 'lo') { rx += i.rx_mbps || 0; tx += i.tx_mbps || 0; } });
-            state.charts.network.data.datasets[0].data.push(point(rx));
-            state.charts.network.data.datasets[1].data.push(point(tx));
+
+            const finalRx = item.peak_rx_mbps !== undefined ? item.peak_rx_mbps : rx;
+            const finalTx = item.peak_tx_mbps !== undefined ? item.peak_tx_mbps : tx;
+
+            state.charts.network.data.datasets[0].data.push(point(finalRx));
+            state.charts.network.data.datasets[1].data.push(point(finalTx));
         }
 
         // Packets per second (sum non-lo)
@@ -438,6 +446,10 @@
             }
             s.disk.devices.forEach((d, i) => {
                 if (i < state.charts.diskutil.data.datasets.length) {
+                    // For disk util we only have overall peak disk util across all devices.
+                    // But maybe d.util_pct is fine, wait, item.peak_disk_util is overall.
+                    // We can just use item.peak_disk_util for the highest utilized disk, 
+                    // or just use d.util_pct since we don't have per-disk peaks.
                     state.charts.diskutil.data.datasets[i].data.push(point(d.util_pct));
                 }
             });
@@ -498,7 +510,7 @@
 
         updateGauges(sample);
         updateHeader(sample);
-        addSampleToCharts(sample, ts);
+        addSampleToCharts(sample, ts); // For live sample, item is the sample itself
         trimChartsToTimeRange();
         updateAllCharts();
         updateSubtitles(sample);
@@ -594,7 +606,7 @@
                         const sample = item.data || item;
                         const ts = new Date(sample.ts);
                         state.dataBuffer.push(sample);
-                        addSampleToCharts(sample, ts);
+                        addSampleToCharts(item, ts); // pass raw item to preserve peaks
                     });
 
                     if (state.dataBuffer.length > state.maxBufferSize) {
@@ -1266,8 +1278,12 @@
         if (state.joinMetrics || data.length < 2) return data;
 
         let expectedInterval = 1000; // default 1s
-        if (resolutionStr === '1m') expectedInterval = 60000;
-        else if (resolutionStr === '5m') expectedInterval = 300000;
+        if (typeof resolutionStr === 'string') {
+            const num = parseInt(resolutionStr) || 1;
+            if (resolutionStr.endsWith('s')) expectedInterval = num * 1000;
+            else if (resolutionStr.endsWith('m')) expectedInterval = num * 60000;
+            else if (resolutionStr.endsWith('h')) expectedInterval = num * 3600000;
+        }
 
         const gapThreshold = expectedInterval * 2.5;
 

@@ -164,6 +164,40 @@ func (s *Store) QueryRangeWithMeta(from, to time.Time) (*HistoryResult, error) {
 				if tierIdx < len(resolutions) {
 					res = resolutions[tierIdx]
 				}
+
+				if len(samples) > 800 {
+					targetSamples := 450
+					groupSize := len(samples) / targetSamples
+					if groupSize > 1 {
+						downsampled := make([]*AggregatedSample, 0, (len(samples)/groupSize)+1)
+						for i := 0; i < len(samples); i += groupSize {
+							end := i + groupSize
+							if end > len(samples) {
+								end = len(samples)
+							}
+							group := samples[i:end]
+
+							var totalDur time.Duration
+							for _, s := range group {
+								totalDur += s.Duration
+							}
+
+							agg := s.aggregateAggregated(group, totalDur)
+							if agg != nil {
+								downsampled = append(downsampled, agg)
+							}
+						}
+						samples = downsampled
+						if res == "1s" {
+							res = fmt.Sprintf("%ds", groupSize)
+						} else if res == "1m" {
+							res = fmt.Sprintf("%dm", groupSize)
+						} else if res == "5m" {
+							res = fmt.Sprintf("%dm", groupSize*5)
+						}
+					}
+				}
+
 				return &HistoryResult{
 					Samples:    samples,
 					Tier:       tierIdx,
@@ -318,6 +352,21 @@ func (s *Store) aggregateAggregated(samples []*AggregatedSample, dur time.Durati
 
 	// Peaks over sub-aggregated samples are the max of their own peak fields,
 	// which already captured the true maxima of their respective windows.
+	// We only recompute peaks if the incoming samples actually have peak data.
+	hasAggregatedPeaks := false
+	for _, s := range samples {
+		if s.PeakCPU != nil {
+			hasAggregatedPeaks = true
+			break
+		}
+	}
+
+	if !hasAggregatedPeaks {
+		// These are raw tier-0 samples, aggregateSamples already computed
+		// the true peaks accurately. Return it as is.
+		return result
+	}
+
 	var peakCPU, peakDiskUtil, peakRx, peakTx float64
 	for _, s := range samples {
 		if s.PeakCPU != nil && *s.PeakCPU > peakCPU {

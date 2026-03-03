@@ -7,6 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 Types of changes: Added, Changed, Deprecated, Removed, Fixed, Security
 
+## [0.6.0]
+
+### Added
+
+- Dynamic backend downsampling for long time windows (e.g. 1h) to improve UI performance and lower bandwidth
+- Graph peak-bound rendering to ensure usage spikes are visible on all historical resolutions
+
+### Changed
+
+- dynamic gap detection algorithm handles variable chunk sizes natively
+
 ## [0.5.1] - 2026-03-03
 
 ### Changed
