@@ -372,3 +372,58 @@ func (t *Tier) Count() uint64 {
 	defer t.mu.RUnlock()
 	return t.count
 }
+
+// TierInfo holds metadata about a tier file, extracted without locking or loading the full file.
+type TierInfo struct {
+	Version  uint64
+	MaxData  int64
+	WriteOff int64
+	Count    uint64
+	OldestTS time.Time
+	NewestTS time.Time
+	Wrapped  bool
+}
+
+// InspectTierFile reads only the header of a tier file and returns metadata.
+func InspectTierFile(path string) (*TierInfo, error) {
+	f, err := os.Open(path)
+	if err != nil {
+		return nil, err
+	}
+	defer func() { _ = f.Close() }()
+
+	buf := make([]byte, headerSize)
+	if _, err := io.ReadFull(f, buf); err != nil {
+		return nil, fmt.Errorf("reading header: %w", err)
+	}
+
+	magic := string(buf[0:8])
+	if magic != magicString {
+		return nil, fmt.Errorf("invalid magic: %s", magic)
+	}
+
+	info := &TierInfo{
+		Version:  binary.LittleEndian.Uint64(buf[8:16]),
+		MaxData:  int64(binary.LittleEndian.Uint64(buf[16:24])),
+		WriteOff: int64(binary.LittleEndian.Uint64(buf[24:32])),
+		Count:    binary.LittleEndian.Uint64(buf[32:40]),
+	}
+
+	oldestNano := int64(binary.LittleEndian.Uint64(buf[40:48]))
+	newestNano := int64(binary.LittleEndian.Uint64(buf[48:56]))
+	if oldestNano > 0 {
+		info.OldestTS = time.Unix(0, oldestNano)
+	}
+	if newestNano > 0 {
+		info.NewestTS = time.Unix(0, newestNano)
+	}
+
+	if info.WriteOff > 0 && info.Count > 0 {
+		fileInfo, _ := f.Stat()
+		if fileInfo != nil && fileInfo.Size() >= headerSize+info.MaxData {
+			info.Wrapped = true
+		}
+	}
+
+	return info, nil
+}

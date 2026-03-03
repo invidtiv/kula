@@ -36,6 +36,7 @@ Commands:
   serve          Start the monitoring daemon with web UI (default)
   tui            Launch the terminal UI dashboard
   hash-password  Generate an Argon2 password hash for config
+  inspect-tier   Display information about a storage tier file
 
 Flags:
   -config string  Path to configuration file (default "config.yaml")
@@ -46,6 +47,7 @@ Examples:
   kula -config /etc/kula/config.yaml serve
   kula tui
   kula hash-password
+  kula inspect-tier data/tier1.dat
 
 `, version)
 }
@@ -74,10 +76,18 @@ func main() {
 		cmd = flag.Arg(0)
 	}
 
-	// Handle hash-password command first (doesn't need config)
+	// Handle commands that don't need config
 	if cmd == "hash-password" {
 		password := readPasswordWithAsterisks()
 		web.PrintHashedPassword(password)
+		return
+	}
+	if cmd == "inspect-tier" {
+		if flag.NArg() < 2 {
+			fmt.Fprintf(os.Stderr, "Usage: kula inspect-tier <path-to-tier-file>\n")
+			os.Exit(1)
+		}
+		runInspectTier(flag.Arg(1))
 		return
 	}
 
@@ -93,7 +103,7 @@ func main() {
 	case "tui":
 		runTUI(cfg, osName, kernelVersion, cpuArch)
 	default:
-		fmt.Fprintf(os.Stderr, "Unknown command: %s\nUsage: kula [serve|tui|hash-password]\n", cmd)
+		fmt.Fprintf(os.Stderr, "Unknown command: %s\nUsage: kula [serve|tui|hash-password|inspect-tier]\n", cmd)
 		os.Exit(1)
 	}
 }
@@ -218,4 +228,36 @@ func readPasswordWithAsterisks() string {
 		fmt.Print("*")
 	}
 	return string(password)
+}
+
+func runInspectTier(path string) {
+	info, err := storage.InspectTierFile(path)
+	if err != nil {
+		fmt.Fprintf(os.Stderr, "Error inspecting tier file: %v\n", err)
+		os.Exit(1)
+	}
+
+	fmt.Printf("File: %s\n", path)
+	fmt.Printf("Version: %d\n", info.Version)
+	fmt.Printf("Max Data Size: %d bytes\n", info.MaxData)
+	fmt.Printf("Write Offset: %d\n", info.WriteOff)
+	fmt.Printf("Total Records: %d\n", info.Count)
+
+	if !info.OldestTS.IsZero() {
+		fmt.Printf("Oldest Timestamp: %s\n", info.OldestTS.Format(time.RFC3339))
+	} else {
+		fmt.Printf("Oldest Timestamp: (none)\n")
+	}
+
+	if !info.NewestTS.IsZero() {
+		fmt.Printf("Newest Timestamp: %s\n", info.NewestTS.Format(time.RFC3339))
+	} else {
+		fmt.Printf("Newest Timestamp: (none)\n")
+	}
+
+	fmt.Printf("Wrapped: %v\n", info.Wrapped)
+
+	if !info.OldestTS.IsZero() && !info.NewestTS.IsZero() {
+		fmt.Printf("Time Range Covered: %s\n", info.NewestTS.Sub(info.OldestTS))
+	}
 }

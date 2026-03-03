@@ -7,6 +7,18 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 Types of changes: Added, Changed, Deprecated, Removed, Fixed, Security
 
+## [Unrelease]
+
+### Added
+
+- Built-in `kula inspect-tier` CLI command to read and display tier file metadata
+- Standalone python script `addons/inspect_tier.py` for parsing binary storage and extracting latest JSON samples
+
+### Changed
+
+- Storage size optimization: Round CPU and network values to 2 decimal places before saving
+- Storage size optimization: Ignore `loop` and `tmpfs` devices
+
 ## [0.6.0] - 2026-03-03
 
 ### Added

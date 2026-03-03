@@ -73,12 +73,12 @@ func (c *Collector) collectNetwork(elapsed float64) NetworkStats {
 		if prev, ok := c.prevNet[name]; ok && elapsed > 0 {
 			rxDelta := cur.rxBytes - prev.rxBytes
 			txDelta := cur.txBytes - prev.txBytes
-			iface.RxMbps = float64(rxDelta) * 8.0 / elapsed / 1_000_000.0
-			iface.TxMbps = float64(txDelta) * 8.0 / elapsed / 1_000_000.0
+			iface.RxMbps = round2(float64(rxDelta) * 8.0 / elapsed / 1_000_000.0)
+			iface.TxMbps = round2(float64(txDelta) * 8.0 / elapsed / 1_000_000.0)
 			rxPktDelta := cur.rxPkts - prev.rxPkts
 			txPktDelta := cur.txPkts - prev.txPkts
-			iface.RxPPS = float64(rxPktDelta) / elapsed
-			iface.TxPPS = float64(txPktDelta) / elapsed
+			iface.RxPPS = round2(float64(rxPktDelta) / elapsed)
+			iface.TxPPS = round2(float64(txPktDelta) / elapsed)
 		}
 
 		stats.Interfaces = append(stats.Interfaces, iface)

@@ -188,11 +188,12 @@ func (s *Store) QueryRangeWithMeta(from, to time.Time) (*HistoryResult, error) {
 							}
 						}
 						samples = downsampled
-						if res == "1s" {
+						switch res {
+						case "1s":
 							res = fmt.Sprintf("%ds", groupSize)
-						} else if res == "1m" {
+						case "1m":
 							res = fmt.Sprintf("%dm", groupSize)
-						} else if res == "5m" {
+						case "5m":
 							res = fmt.Sprintf("%dm", groupSize*5)
 						}
 					}

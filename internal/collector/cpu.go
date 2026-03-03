@@ -71,7 +71,7 @@ func calcCorePct(prev, cur cpuRaw) CPUCoreStats {
 	}
 
 	pct := func(prevVal, curVal uint64) float64 {
-		return float64(curVal-prevVal) / totalDelta * 100.0
+		return round2(float64(curVal-prevVal) / totalDelta * 100.0)
 	}
 
 	cs := CPUCoreStats{
@@ -87,7 +87,7 @@ func calcCorePct(prev, cur cpuRaw) CPUCoreStats {
 		Guest:   pct(prev.guest, cur.guest),
 		GuestNi: pct(prev.guestNice, cur.guestNice),
 	}
-	cs.Usage = 100.0 - cs.Idle
+	cs.Usage = round2(100.0 - cs.Idle)
 	return cs
 }
 

@@ -2,8 +2,14 @@ package collector
 
 import (
 	"log"
+	"math"
 	"strconv"
 )
+
+// round2 rounds a float to 2 decimal places
+func round2(v float64) float64 {
+	return math.Round(v*100) / 100
+}
 
 // parseUint wrapper replacing `strconv.ParseUint` that logs errors explicitly at debug level
 func parseUint(s string, base int, bitSize int, fieldName string) uint64 {

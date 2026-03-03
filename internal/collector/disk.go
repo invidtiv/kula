@@ -33,6 +33,11 @@ func parseDiskStats() map[string]diskRaw {
 		}
 		name := fields[2]
 
+		// Skip loop devices
+		if strings.HasPrefix(name, "loop") {
+			continue
+		}
+
 		// Skip partitions — only keep whole devices and device-mapper
 		// Heuristic: skip if name ends with a digit and is a partition (sda1, nvme0n1p1)
 		if isPartition(name) {
@@ -148,7 +153,7 @@ func collectFileSystems() []FileSystemInfo {
 		// Only real filesystems
 		switch fstype {
 		case "ext2", "ext3", "ext4", "xfs", "btrfs", "zfs", "f2fs",
-			"vfat", "ntfs", "fuseblk", "tmpfs", "nfs", "nfs4", "cifs":
+			"vfat", "ntfs", "fuseblk", "nfs", "nfs4", "cifs":
 		default:
 			continue
 		}

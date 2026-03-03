@@ -35,7 +35,7 @@ func (c *Collector) collectSelf(elapsed float64) SelfStats {
 					uDelta := cur.utime - c.prevSelf.utime
 					sDelta := cur.stime - c.prevSelf.stime
 					totalDelta := float64(uDelta+sDelta) / clockTick
-					s.CPUPercent = totalDelta / elapsed * 100.0
+					s.CPUPercent = round2(totalDelta / elapsed * 100.0)
 				}
 				c.prevSelf = cur
 			}
