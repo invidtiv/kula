@@ -26,7 +26,7 @@ Kula collects system metrics every second by reading directly from `/proc` and `
 
 | Metric | What's Collected |
 |--------|-----------------|
-| **CPU** | Per-core & total usage (user, system, idle, iowait, irq, steal, guest) |
+| **CPU** | Total usage (user, system, idle, iowait, irq, steal, guest) |
 | **Load** | 1 / 5 / 15 min averages, running & total tasks |
 | **Memory** | Total, free, available, used, buffers, cached, shmem, dirty, mapped |
 | **Swap** | Total, free, used, cached |
