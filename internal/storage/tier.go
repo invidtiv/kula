@@ -305,17 +305,84 @@ func (t *Tier) ReadRange(from, to time.Time) ([]*AggregatedSample, error) {
 
 // ReadLatest returns the n most recent samples.
 func (t *Tier) ReadLatest(n int) ([]*AggregatedSample, error) {
-	to := time.Now()
-	from := time.Time{} // epoch
-	all, err := t.ReadRange(from, to)
-	if err != nil {
-		return nil, err
+	t.mu.RLock()
+	defer t.mu.RUnlock()
+
+	if t.count == 0 {
+		return nil, nil
 	}
 
-	if len(all) <= n {
-		return all, nil
+	type segment struct{ start, size int64 }
+	var segments []segment
+
+	if t.wrapped {
+		segments = append(segments, segment{t.writeOff, t.maxData - t.writeOff})
+		segments = append(segments, segment{0, t.writeOff})
+	} else {
+		segments = append(segments, segment{0, t.writeOff})
 	}
-	return all[len(all)-n:], nil
+
+	// First pass: find the offsets of all records
+	type recordLoc struct {
+		offset int64
+		length uint32
+	}
+	locs := make([]recordLoc, 0, n)
+
+	for _, seg := range segments {
+		bytesRead := int64(0)
+		sr := io.NewSectionReader(t.file, headerSize+seg.start, seg.size)
+		br := bufio.NewReaderSize(sr, 1024*1024)
+
+		for bytesRead < seg.size {
+			if seg.size-bytesRead < 4 {
+				break
+			}
+			lenBuf := make([]byte, 4)
+			if _, err := io.ReadFull(br, lenBuf); err != nil {
+				break
+			}
+			dataLen := binary.LittleEndian.Uint32(lenBuf)
+			if dataLen == 0 || int64(dataLen) > t.maxData {
+				break
+			}
+
+			recordLen := int64(4 + dataLen)
+			if bytesRead+recordLen > seg.size {
+				break
+			}
+
+			loc := recordLoc{
+				offset: headerSize + seg.start + bytesRead,
+				length: dataLen,
+			}
+			if len(locs) < n {
+				locs = append(locs, loc)
+			} else {
+				copy(locs, locs[1:])
+				locs[len(locs)-1] = loc
+			}
+
+			if _, err := br.Discard(int(dataLen)); err != nil {
+				break
+			}
+			bytesRead += recordLen
+		}
+	}
+
+	var samples []*AggregatedSample
+	for _, loc := range locs {
+		data := make([]byte, loc.length)
+		if _, err := t.file.ReadAt(data, loc.offset+4); err != nil {
+			continue
+		}
+		sample, err := decodeSample(data)
+		if err == nil {
+			samples = append(samples, sample)
+		}
+	}
+
+	return samples, nil
 }
 
 func (t *Tier) Close() error {
