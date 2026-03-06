@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"log"
 	"net/http"
+	"net/url"
 	"sync"
 	"time"
 
@@ -21,28 +22,24 @@ var upgrader = websocket.Upgrader{
 	ReadBufferSize:  1024,
 	WriteBufferSize: 1024,
 	CheckOrigin: func(r *http.Request) bool {
-		// Strict origin check to prevent Cross-Site WebSocket Hijacking (CSWSH)
 		origin := r.Header.Get("Origin")
 		if origin == "" {
-			return true // Allow non-browser clients (like CLI tools) to connect
+			// Explicitly allow non-browser clients (like CLI tools) which omit the Origin
+			// header. Browsers always send an Origin header for WebSocket connections.
+			return true
 		}
 
-		// Require the origin host to match the request host exactly
-		// Parses the host and ignores scheme (http vs https)
-		originHost := ""
-		for i := 0; i < len(origin); i++ {
-			if origin[i] == ':' && i+2 < len(origin) && origin[i+1] == '/' && origin[i+2] == '/' {
-				originHost = origin[i+3:]
-				break
-			}
-		}
-
-		if originHost == "" {
+		// Parse the Origin header securely using net/url to prevent crafted origin bypasses.
+		u, err := url.ParseRequestURI(origin)
+		if err != nil {
+			log.Printf("WebSocket upgrade blocked: invalid Origin header format (%v)", err)
 			return false
 		}
 
-		if originHost != r.Host {
-			log.Printf("WebSocket upgrade blocked: Origin (%s) does not match Host (%s)", originHost, r.Host)
+		// Require the origin host to match the request host exactly (ignores scheme, but checks domain and port).
+		// Note: This prevents Cross-Site WebSocket Hijacking (CSWSH).
+		if u.Host != r.Host {
+			log.Printf("WebSocket upgrade blocked: Origin (%s) does not match Host (%s)", u.Host, r.Host)
 			return false
 		}
 
