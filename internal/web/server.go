@@ -11,6 +11,7 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"strings"
 	"sync"
 	"time"
 
@@ -37,7 +38,7 @@ func NewServer(cfg config.WebConfig, c *collector.Collector, s *storage.Store, s
 		cfg:       cfg,
 		collector: c,
 		store:     s,
-		auth:      NewAuthManager(cfg.Auth, storageDir),
+		auth:      NewAuthManager(cfg.Auth, storageDir, cfg.TrustProxy),
 		hub:       newWSHub(),
 	}
 	return srv
@@ -72,9 +73,9 @@ func (w *statusResponseWriter) Hijack() (net.Conn, *bufio.ReadWriter, error) {
 	return h.Hijack()
 }
 
-func loggingMiddleware(cfg config.LogConfig, next http.Handler) http.Handler {
+func loggingMiddleware(cfg config.WebConfig, next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if !cfg.Enabled {
+		if !cfg.Logging.Enabled {
 			next.ServeHTTP(w, r)
 			return
 		}
@@ -85,16 +86,8 @@ func loggingMiddleware(cfg config.LogConfig, next http.Handler) http.Handler {
 		next.ServeHTTP(sw, r)
 
 		duration := time.Since(start)
-		clientIP := r.RemoteAddr
-		if fwd := r.Header.Get("X-Forwarded-For"); fwd != "" {
-			clientIP = fwd
-		}
+		clientIP := getClientIP(r, cfg.TrustProxy)
 
-		// "access" logs all requests
-		// "perf" logs by default could skip super fast static assets or just log everything,
-		// but since the user requested perf/access separation, we'll log all HTTP requests regardless,
-		// but maybe skip static files or simplify the log. I'll just keep the detailed format for both
-		// but hide it if disabled.
 		log.Printf("[API] %s %s %s %d %v", clientIP, r.Method, r.URL.Path, sw.status, duration)
 	})
 }
@@ -125,7 +118,7 @@ func (s *Server) Start() error {
 	apiMux.HandleFunc("/api/auth/status", s.handleAuthStatus)
 
 	// Wrap apiMux with logging
-	loggedApiMux := loggingMiddleware(s.cfg.Logging, apiMux)
+	loggedApiMux := loggingMiddleware(s.cfg, apiMux)
 
 	// WebSocket
 	apiMux.HandleFunc("/ws", s.handleWebSocket)
@@ -327,7 +320,7 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	ip := getClientIP(r)
+	ip := getClientIP(r, s.cfg.TrustProxy)
 
 	if !s.auth.Limiter.Allow(ip) {
 		http.Error(w, `{"error":"too many requests"}`, http.StatusTooManyRequests)
@@ -405,7 +398,7 @@ func (s *Server) handleAuthStatus(w http.ResponseWriter, r *http.Request) {
 	if !s.cfg.Auth.Enabled {
 		status["authenticated"] = true
 	} else {
-		ip := getClientIP(r)
+		ip := getClientIP(r, s.cfg.TrustProxy)
 		userAgent := r.UserAgent()
 
 		cookie, err := r.Cookie("kula_session")
@@ -467,10 +460,12 @@ func (h *wsHub) broadcast(data []byte) {
 }
 
 // getClientIP extracts the real client IP, considering proxies and stripping ephemeral ports.
-func getClientIP(r *http.Request) string {
-	ip := r.Header.Get("X-Forwarded-For")
-	if ip != "" {
-		return ip
+func getClientIP(r *http.Request, trustProxy bool) string {
+	if trustProxy {
+		if xff := r.Header.Get("X-Forwarded-For"); xff != "" {
+			// Take only the first (leftmost) IP from the chain
+			return strings.TrimSpace(strings.SplitN(xff, ",", 2)[0])
+		}
 	}
 
 	host, _, err := net.SplitHostPort(r.RemoteAddr)

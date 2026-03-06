@@ -67,7 +67,7 @@ func TestGenerateSalt(t *testing.T) {
 }
 
 func TestValidateCredentialsDisabled(t *testing.T) {
-	am := NewAuthManager(config.AuthConfig{Enabled: false}, "")
+	am := NewAuthManager(config.AuthConfig{Enabled: false}, "", false)
 	if !am.ValidateCredentials("any", "any") {
 		t.Error("With auth disabled, ValidateCredentials should return true")
 	}
@@ -82,7 +82,7 @@ func TestValidateCredentialsCorrect(t *testing.T) {
 		PasswordHash: hash,
 		PasswordSalt: salt,
 		Argon2:       defaultArgonParams,
-	}, "")
+	}, "", false)
 	if !am.ValidateCredentials("admin", "secret") {
 		t.Error("Valid credentials should pass")
 	}
@@ -97,7 +97,7 @@ func TestValidateCredentialsWrong(t *testing.T) {
 		PasswordHash: hash,
 		PasswordSalt: salt,
 		Argon2:       defaultArgonParams,
-	}, "")
+	}, "", false)
 	if am.ValidateCredentials("admin", "wrong") {
 		t.Error("Wrong password should fail")
 	}
@@ -110,7 +110,7 @@ func TestSessionLifecycle(t *testing.T) {
 	am := NewAuthManager(config.AuthConfig{
 		Enabled:        true,
 		SessionTimeout: time.Hour,
-	}, "")
+	}, "", false)
 
 	token, err := am.CreateSession("admin", "127.0.0.1", "test-agent")
 	if err != nil {
@@ -131,7 +131,7 @@ func TestSessionExpiry(t *testing.T) {
 	am := NewAuthManager(config.AuthConfig{
 		Enabled:        true,
 		SessionTimeout: time.Millisecond, // very short timeout
-	}, "")
+	}, "", false)
 
 	token, _ := am.CreateSession("admin", "127.0.0.1", "test-agent")
 	time.Sleep(5 * time.Millisecond)
@@ -144,7 +144,7 @@ func TestCleanupSessions(t *testing.T) {
 	am := NewAuthManager(config.AuthConfig{
 		Enabled:        true,
 		SessionTimeout: time.Millisecond,
-	}, "")
+	}, "", false)
 
 	_, _ = am.CreateSession("user1", "127.0.0.1", "test-agent")
 	_, _ = am.CreateSession("user2", "127.0.0.1", "test-agent")
@@ -161,7 +161,7 @@ func TestCleanupSessions(t *testing.T) {
 }
 
 func TestAuthMiddlewareDisabled(t *testing.T) {
-	am := NewAuthManager(config.AuthConfig{Enabled: false}, "")
+	am := NewAuthManager(config.AuthConfig{Enabled: false}, "", false)
 	handler := am.AuthMiddleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	}))
@@ -179,7 +179,7 @@ func TestAuthMiddlewareNoToken(t *testing.T) {
 	am := NewAuthManager(config.AuthConfig{
 		Enabled:        true,
 		SessionTimeout: time.Hour,
-	}, "")
+	}, "", false)
 	handler := am.AuthMiddleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	}))
@@ -197,7 +197,7 @@ func TestAuthMiddlewareValidCookie(t *testing.T) {
 	am := NewAuthManager(config.AuthConfig{
 		Enabled:        true,
 		SessionTimeout: time.Hour,
-	}, "")
+	}, "", false)
 	token, _ := am.CreateSession("admin", "127.0.0.1", "mock-agent")
 
 	handler := am.AuthMiddleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -205,7 +205,7 @@ func TestAuthMiddlewareValidCookie(t *testing.T) {
 	}))
 
 	req := httptest.NewRequest("GET", "/api/test", nil)
-	req.Header.Set("X-Forwarded-For", "127.0.0.1")
+	req.RemoteAddr = "127.0.0.1:1234"
 	req.Header.Set("User-Agent", "mock-agent")
 	req.AddCookie(&http.Cookie{Name: "kula_session", Value: token})
 	rec := httptest.NewRecorder()
@@ -220,7 +220,7 @@ func TestAuthMiddlewareBearerToken(t *testing.T) {
 	am := NewAuthManager(config.AuthConfig{
 		Enabled:        true,
 		SessionTimeout: time.Hour,
-	}, "")
+	}, "", false)
 	token, _ := am.CreateSession("admin", "127.0.0.1", "mock-agent")
 
 	handler := am.AuthMiddleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -228,7 +228,7 @@ func TestAuthMiddlewareBearerToken(t *testing.T) {
 	}))
 
 	req := httptest.NewRequest("GET", "/api/test", nil)
-	req.Header.Set("X-Forwarded-For", "127.0.0.1")
+	req.RemoteAddr = "127.0.0.1:1234"
 	req.Header.Set("User-Agent", "mock-agent")
 	req.Header.Set("Authorization", "Bearer "+token)
 	rec := httptest.NewRecorder()
@@ -245,7 +245,7 @@ func TestSessionHashingOnDisk(t *testing.T) {
 	am := NewAuthManager(config.AuthConfig{
 		Enabled:        true,
 		SessionTimeout: time.Hour,
-	}, tmpDir)
+	}, tmpDir, false)
 
 	token, err := am.CreateSession("admin", "127.0.0.1", "agent")
 	if err != nil {
@@ -285,4 +285,64 @@ func stringContains(s, substr string) bool {
 		}
 	}
 	return false
+}
+func TestGetClientIP(t *testing.T) {
+	tests := []struct {
+		name       string
+		remoteAddr string
+		xff        string
+		trustProxy bool
+		want       string
+	}{
+		{
+			name:       "Direct connection, no trust",
+			remoteAddr: "1.2.3.4:1234",
+			xff:        "",
+			trustProxy: false,
+			want:       "1.2.3.4",
+		},
+		{
+			name:       "XFF present, no trust",
+			remoteAddr: "1.2.3.4:1234",
+			xff:        "10.0.0.1",
+			trustProxy: false,
+			want:       "1.2.3.4",
+		},
+		{
+			name:       "XFF present, trusted",
+			remoteAddr: "1.2.3.4:1234",
+			xff:        "10.0.0.1",
+			trustProxy: true,
+			want:       "10.0.0.1",
+		},
+		{
+			name:       "XFF list, trusted",
+			remoteAddr: "1.2.3.4:1234",
+			xff:        "10.0.0.1, 10.0.0.2, 1.2.3.4",
+			trustProxy: true,
+			want:       "10.0.0.1",
+		},
+		{
+			name:       "Invalid RemoteAddr format",
+			remoteAddr: "not-an-ip",
+			xff:        "",
+			trustProxy: false,
+			want:       "not-an-ip",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			req := httptest.NewRequest("GET", "/", nil)
+			req.RemoteAddr = tt.remoteAddr
+			if tt.xff != "" {
+				req.Header.Set("X-Forwarded-For", tt.xff)
+			}
+
+			got := getClientIP(req, tt.trustProxy)
+			if got != tt.want {
+				t.Errorf("%s: getClientIP() = %v, want %v", tt.name, got, tt.want)
+			}
+		})
+	}
 }

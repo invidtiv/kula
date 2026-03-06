@@ -26,6 +26,7 @@ type AuthManager struct {
 	storageDir string
 	sessions   map[string]*session
 	Limiter    *RateLimiter
+	trustProxy bool
 }
 
 // RateLimiter tracks recent rapid login attempts by IP.
@@ -52,7 +53,7 @@ type sessionData struct {
 	ExpiresAt time.Time `json:"expires_at"`
 }
 
-func NewAuthManager(cfg config.AuthConfig, storageDir string) *AuthManager {
+func NewAuthManager(cfg config.AuthConfig, storageDir string, trustProxy bool) *AuthManager {
 	return &AuthManager{
 		cfg:        cfg,
 		storageDir: storageDir,
@@ -60,6 +61,7 @@ func NewAuthManager(cfg config.AuthConfig, storageDir string) *AuthManager {
 		Limiter: &RateLimiter{
 			attempts: make(map[string][]time.Time),
 		},
+		trustProxy: trustProxy,
 	}
 }
 
@@ -186,7 +188,7 @@ func (a *AuthManager) AuthMiddleware(next http.Handler) http.Handler {
 			return
 		}
 
-		ip := getClientIP(r)
+		ip := getClientIP(r, a.trustProxy)
 		userAgent := r.UserAgent()
 
 		// Check cookie
