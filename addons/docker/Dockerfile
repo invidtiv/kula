@@ -1,4 +1,4 @@
-FROM golang:1.25-alpine AS builder
+FROM golang:1.26 AS builder
 
 WORKDIR /app
 
@@ -13,7 +13,10 @@ COPY . .
 RUN CGO_ENABLED=0 GOOS=linux go build -trimpath -ldflags="-s -w" -buildvcs=false -o kula ./cmd/kula/
 
 # ---- Final Stage ----
-FROM alpine:3.19
+FROM alpine:3.23
+
+# Create unprivileged user
+RUN addgroup -S kula && adduser -S kula -G kula
 
 WORKDIR /app
 
@@ -21,14 +24,22 @@ WORKDIR /app
 RUN apk --no-cache add ca-certificates tzdata bash
 
 # Copy the binary from the builder stage
-COPY --from=builder /app/kula /usr/local/bin/kula
+COPY --from=builder /app/kula /app/kula
 
-# Create directories for config and data
-RUN mkdir -p /etc/kula /var/lib/kula
+# Copy example config and adjust it for Docker (/app/data and listen on 0.0.0.0)
+COPY config.example.yaml /app/config.yaml
+RUN sed -i 's|directory: /var/lib/kula|directory: /app/data|' /app/config.yaml && \
+    sed -i 's|listen: "127.0.0.1"|listen: "0.0.0.0"|' /app/config.yaml
 
-# Copy example config (can be used as default)
-COPY config.example.yaml /etc/kula/config.example.yaml
+# Create data directory and set permissions
+RUN mkdir -p /app/data && chown -R kula:kula /app
+
+# Switch to unprivileged user
+USER kula
+
+# Expose the default port
+EXPOSE 8080
 
 # Set entrypoint
-ENTRYPOINT ["/usr/local/bin/kula"]
-CMD ["serve", "--config", "/etc/kula/config.yaml"]
+ENTRYPOINT ["/app/kula"]
+CMD ["serve", "--config", "/app/config.yaml"]

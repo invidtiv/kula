@@ -19,6 +19,9 @@ fi
 # If run from docker/, we need to tell docker to use the parent dir for context
 cd "$(dirname "$0")/../.."
 
-echo "Building Docker image 'kula'..."
-docker build -t kula -f addons/docker/Dockerfile .
+# Read version from VERSION file
+VERSION=$(cat VERSION | tr -d '[:space:]')
+
+echo "Building Docker image 'kula:$VERSION'..."
+docker build -t kula:"$VERSION" -f addons/docker/Dockerfile .
 echo "Done!"

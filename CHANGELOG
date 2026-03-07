@@ -9,6 +9,10 @@ Types of changes: Added, Changed, Deprecated, Removed, Fixed, Security
 
 ## [Unreleased]
 
+### Added
+
+- First docker hub image release
+
 ### Fixed
 
 - Clock sync check inside containers
