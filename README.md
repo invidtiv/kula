@@ -79,20 +79,16 @@ Data is persisted in **pre-allocated ring-buffer files** per tier. Each tier fil
 - **Tier 2** — 1-minute aggregates: averaged CPU & network, last-value gauges (default 150 MB)
 - **Tier 3** — 5-minute aggregates, same logic (default 50 MB)
 
-### Web Backend
+### Dashboard
 
-The HTTP server exposes a REST API (`/api/current`, `/api/history`, `/api/config`) and a WebSocket endpoint (`/ws`) for live streaming. Authentication is optional — when enabled, it uses **Argon2id hashing with salt** and session cookies or Bearer tokens.
-
-### Dashboard SPA
+The HTTP server on backend exposes a REST API and a WebSocket endpoint for live streaming. Authentication is optional - when enabled, it uses Argon2id hashing with salt and session cookies.
 
 The frontend is a single-page application embedded in the binary. Built on Chart.js with custom SVG gauges, it connects via WebSocket for live updates and falls back to history API for longer time ranges. Features include:
 
 - Interactive zoom with drag-select (auto-pauses live stream)
 - Focus mode to show only selected graphs
 - Grid / stacked list layout toggle
-- Alert system for clock sync & entropy issues
-- Gap detection for missing data points
-
+- Alert system for clock sync, entropy issues, overload
 ---
 
 ## Installation
@@ -132,25 +128,15 @@ bash addons/build.sh
 
 ## Usage
 
-### Security Recommendations
-
-Kula uses **Argon2id** for password hashing. If you enable authentication, it is highly recommended to tune the Argon2 parameters (`time`, `memory`, `threads`) in `config.yaml` based on your hardware capabilities to increase resistance against cracking.
-
-**Important:** Your `config.yaml` file contains the plaintext `password_salt` and the generated `password_hash`. Ensure the configuration file is protected from unauthorized access on the server:
-
-```bash
-chmod 0600 /path/to/kula/config.yaml
-```
-
 ### Quick Start
 
 ```bash
-# 1. Copy and edit config
+# 1. Copy and edit config (optional)
 cp config.example.yaml config.yaml
 
 # 2. Start the server
 ./kula serve
-# Dashboard at http://localhost:8080
+# Dashboard at http://127.0.0.1:8080
 
 # 3. Or use the terminal UI
 ./kula tui
@@ -181,27 +167,6 @@ sudo rc-update add kula default
 # runit
 sudo cp -r addons/init/runit/kula /etc/sv/
 sudo ln -s /etc/sv/kula /var/service/
-```
-
-### Running behind reverse proxy (nginx)
-
-```nginx
-server {
-    listen 80 ;
-    listen [::]:80 ;
-    server_name kula.localhost;
-
-    location / {
-        proxy_pass http://localhost:8080;
-        proxy_http_version 1.1;
-        proxy_set_header Upgrade $http_upgrade;
-        proxy_set_header Connection "upgrade";
-        proxy_set_header Host $host;
-        proxy_set_header X-Real-IP $remote_addr;
-        proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-        proxy_set_header X-Forwarded-Proto $scheme;
-    }
-}
 ```
 
 ---
@@ -279,59 +244,6 @@ cd dist/aur && makepkg -si
 ```bash
 bash addons/docker/build.sh
 docker compose -f addons/docker/docker-compose.yml up -d
-```
-
----
-
-## Project Structure
-
-```
-kula/
-├── cmd/
-│   ├── kula/
-│   │   └── main.go             # CLI entry point, flag parsing, commands
-│   └── gen-mock-data/
-│       └── main.go             # Mock data generator utility
-├── internal/
-│   ├── collector/              # Metric collectors (/proc, /sys readers)
-│   │   ├── collector.go        #   Orchestrator — gathers all metrics
-│   │   ├── types.go            #   Sample struct (CPU, mem, net, disk...)
-│   │   ├── cpu.go              #   /proc/stat parser
-│   │   ├── memory.go           #   /proc/meminfo parser
-│   │   ├── network.go          #   /proc/net/* parser
-│   │   ├── disk.go             #   /proc/diskstats + /proc/mounts
-│   │   └── system.go           #   Uptime, entropy, hostname
-│   ├── config/                 # YAML config loader with defaults
-│   ├── sandbox/                # Linux Landlock sandboxing
-│   ├── storage/                # Tiered ring-buffer engine
-│   │   ├── store.go            #   Multi-tier coordinator + aggregation
-│   │   ├── tier.go             #   Single ring-buffer file
-│   │   └── codec.go            #   JSON encode/decode for samples
-│   ├── tui/                    # Terminal UI (bubbletea + lipgloss)
-│   └── web/                    # HTTP/WebSocket server
-│       ├── server.go           #   Routes, API handlers, startup
-│       ├── websocket.go        #   Live streaming hub + client mgmt
-│       ├── auth.go             #   Argon2id auth, sessions, middleware
-│       └── static/             #   Embedded SPA (served from binary)
-│           ├── index.html      #     Dashboard markup
-│           ├── app.js          #     Charts, WebSocket, UI logic
-│           └── style.css       #     Dark theme, glassmorphism
-├── addons/
-│   ├── inspect_tier.py         # Standalone Python script for reading tiers
-│   ├── benchmark.sh            # Storage engine benchmark suite (formatted output)
-│   ├── build.sh                # Cross-compile (amd64/arm64/riscv64)
-│   ├── build_deb.sh            # Debian package builder
-│   ├── build_aur.sh            # Arch AUR PKGBUILD generator
-│   ├── check.sh                # Linting + testing
-│   ├── kula.1                  # Man page
-│   ├── release.sh              # CI packaging wrapper
-│   ├── bash-completion/        # Bash completion script
-│   ├── docker/                 # Dockerfile + compose
-│   └── init/                   # Service files (systemd/openrc/runit)
-├── config.example.yaml
-├── VERSION                     # Single source of truth for version
-├── CHANGELOG
-└── LICENSE                     # AGPL-3.0
 ```
 
 ---
