@@ -28,6 +28,25 @@
     --radius-sm: 8px;
     --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
     --font-mono: 'JetBrains Mono', 'Fira Code', monospace;
+    --chart-grid: rgba(55, 65, 81, 0.2);
+    --chart-text: #94a3b8;
+}
+
+body.light-mode {
+    --bg-primary: #f8fafc;
+    --bg-secondary: #f1f5f9;
+    --bg-card: rgba(255, 255, 255, 0.8);
+    --bg-card-hover: rgba(255, 255, 255, 0.95);
+    --border-color: rgba(203, 213, 225, 0.8);
+    --border-glow: rgba(59, 130, 246, 0.2);
+    --text-primary: #1e293b;
+    --text-secondary: #475569;
+    --text-muted: #64748b;
+    --gauge-bg: rgba(226, 232, 240, 0.8);
+    --shadow-lg: 0 10px 25px rgba(0, 0, 0, 0.05);
+    --shadow-glow: 0 0 15px rgba(59, 130, 246, 0.05);
+    --chart-grid: rgba(203, 213, 225, 0.4);
+    --chart-text: #64748b;
 }
 
 *,
@@ -495,7 +514,7 @@ body {
 .bar-gauge-track {
     width: 100%;
     height: 16px;
-    background: rgba(30, 41, 59, 0.8);
+    background: var(--gauge-bg);
     border-radius: 8px;
     overflow: hidden;
     position: relative;
@@ -605,6 +624,10 @@ body {
     outline: none;
     transition: border-color 0.2s;
     color-scheme: dark;
+}
+
+body.light-mode .time-input {
+    color-scheme: light;
 }
 
 .time-input:focus {
@@ -760,6 +783,10 @@ body {
     z-index: 10;
     pointer-events: none;
     transition: background 0.15s;
+}
+
+body.light-mode .focus-selecting .chart-card::after {
+    background: rgba(255, 255, 255, 0.4);
 }
 
 .focus-selecting .chart-card.focus-selected::after {
