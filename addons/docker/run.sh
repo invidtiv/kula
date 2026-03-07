@@ -29,7 +29,7 @@ fi
 echo "Running $IMAGE (no data persistence)..."
 
 docker run --rm -it \
-  --name kula-run \
+  --name kula \
   --pid host \
   --network host \
   -v /proc:/proc:ro \
