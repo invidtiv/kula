@@ -52,20 +52,20 @@ func TestCollectCPUTemp(t *testing.T) {
 	sysPath = "testdata/sys" // mocks our newly created sys/class/hwmon files
 
 	// Reset the package-level cache so discovery runs
-	sysTempPath = nil
+	sysTempSensors = nil
 
-	temp := collectCPUTemperature()
+	temp, _ := collectCPUTemperature()
 	// testdata/sys/class/hwmon/hwmon0/temp1_input contains "45123", so expect 45.12
 	if temp != 45.12 {
 		t.Errorf("expected 45.12, got %v", temp)
 	}
 
 	// 2. Test thermal_zone fallback
-	sysTempPath = nil
+	sysTempSensors = nil
 	// Temporarily break hwmon so it falls back to thermal_zone0
 	sysPath = "testdata/sys_thermal_only"
 
-	temp2 := collectCPUTemperature()
+	temp2, _ := collectCPUTemperature()
 	// If the fallback fails gracefully due to missing dir, it will return 0.
 	// To actually test fallback properly we would need to mock `sys_thermal_only`.
 	// For simplicity, let's just make sure it doesn't panic.

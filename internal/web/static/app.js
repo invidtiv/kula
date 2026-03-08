@@ -38,6 +38,7 @@
         liveQueue: [],        // samples buffered while history is loading
         theme: localStorage.getItem('kula_theme') || 'dark',
         diskSpaceMountNames: [], // mount names matching diskspace chart datasets
+        cpuTempSensorNames: [], // sensor names matching cpu temp chart datasets
     };
 
     // ---- Color Palette ----
@@ -253,7 +254,8 @@
             { label: 'Total', borderColor: colors.cyan, data: [], fill: false, borderWidth: 2 },
         ], { max: 100, ticks: { callback: v => v + '%' } });
 
-        // CPU Temperature
+        // CPU Temperature - dynamically constructed on first sample if sensors exist
+        state.cpuTempSensorNames = [];
         state.charts.cputemp = createTimeSeriesChart('chart-cpu-temp', [
             { label: 'Temperature', borderColor: colors.orange, backgroundColor: colors.orangeAlpha, fill: true, data: [] },
             { label: 'Peak Temp', borderColor: colors.red, data: [], fill: false, borderDash: [4, 2] },
@@ -426,13 +428,51 @@
 
         // CPU Temperature
         const tempCard = document.getElementById('card-cpu-temp');
-        if (state.charts.cputemp && s.cpu?.temp > 0) {
+        if (state.charts.cputemp && ((s.cpu?.sensors && s.cpu.sensors.length > 0) || s.cpu?.temp > 0)) {
             if (tempCard) tempCard.classList.remove('hidden');
-            state.charts.cputemp.data.datasets[0].data.push(point(s.cpu.temp));
 
-            // Show peak temperature if available
-            const tempVal = item.peak_temp !== undefined ? item.peak_temp : s.cpu.temp;
-            state.charts.cputemp.data.datasets[1].data.push(point(tempVal));
+            const hasSensors = s.cpu?.sensors && s.cpu.sensors.length > 0;
+
+            if (hasSensors) {
+                const incomingNames = s.cpu.sensors.map(sens => sens.name);
+                if (incomingNames.join(',') !== state.cpuTempSensorNames.join(',')) {
+                    state.cpuTempSensorNames = incomingNames;
+                    const cpuTempColorPairs = [
+                        [colors.orange, colors.orangeAlpha],
+                        [colors.red, colors.redAlpha],
+                        [colors.yellow, colors.yellowAlpha],
+                        [colors.pink, colors.pinkAlpha],
+                        [colors.purple, colors.purpleAlpha],
+                        [colors.cyan, colors.cyanAlpha],
+                    ];
+                    state.charts.cputemp.data.datasets = incomingNames.map((name, i) => ({
+                        label: name,
+                        borderColor: cpuTempColorPairs[i % cpuTempColorPairs.length][0],
+                        backgroundColor: cpuTempColorPairs[i % cpuTempColorPairs.length][1],
+                        fill: i === 0, // only fill the primary one
+                        data: [],
+                        pointHitRadius: 5,
+                    }));
+                }
+
+                s.cpu.sensors.forEach((sens, i) => {
+                    if (i < state.charts.cputemp.data.datasets.length) {
+                        state.charts.cputemp.data.datasets[i].data.push(point(sens.value));
+                    }
+                });
+            } else {
+                // Fallback to plain Temperature and Peak Temp if no sensors array
+                if (state.charts.cputemp.data.datasets.length !== 2 || state.charts.cputemp.data.datasets[0].label !== 'Temperature') {
+                    state.cpuTempSensorNames = [];
+                    state.charts.cputemp.data.datasets = [
+                        { label: 'Temperature', borderColor: colors.orange, backgroundColor: colors.orangeAlpha, fill: true, data: [] },
+                        { label: 'Peak Temp', borderColor: colors.red, data: [], fill: false, borderDash: [4, 2] },
+                    ];
+                }
+                state.charts.cputemp.data.datasets[0].data.push(point(s.cpu.temp));
+                const tempVal = item.peak_temp !== undefined ? item.peak_temp : s.cpu.temp;
+                state.charts.cputemp.data.datasets[1].data.push(point(tempVal));
+            }
         } else if (tempCard && !tempCard.classList.contains('hidden')) {
             tempCard.classList.add('hidden');
         }

@@ -19,9 +19,15 @@ type Sample struct {
 
 // CPUStats holds per-core and total CPU usage percentages.
 type CPUStats struct {
-	Total       CPUCoreStats `json:"total"`
-	NumCores    int          `json:"num_cores"`
-	Temperature float64      `json:"temp,omitempty"`
+	Total       CPUCoreStats    `json:"total"`
+	NumCores    int             `json:"num_cores"`
+	Temperature float64         `json:"temp,omitempty"`
+	Sensors     []CPUTempSensor `json:"sensors,omitempty"`
+}
+
+type CPUTempSensor struct {
+	Name  string  `json:"name"`
+	Value float64 `json:"value"`
 }
 
 type CPUCoreStats struct {

@@ -15,10 +15,15 @@ type cpuRaw struct {
 	guest, guestNice                                      uint64
 }
 
+type sysSensor struct {
+	Name string
+	Path string
+}
+
 var (
-	// Cached path to the CPU temperature file so we don't scan on every tick.
-	// Empty means initialized but not found, nil means not yet initialized.
-	sysTempPath *string
+	// Cached sensors for CPU temperature so we don't scan on every tick.
+	// Nil means not yet initialized. Empty means initialized but not found.
+	sysTempSensors []sysSensor
 )
 
 func parseProcStat() []cpuRaw {
@@ -150,34 +155,79 @@ func collectLoadAvg() LoadAvg {
 }
 
 // collectCPUTemperature reads the CPU temperature from sysfs.
-func collectCPUTemperature() float64 {
-	if sysTempPath == nil {
-		path := discoverCPUTempPath()
-		sysTempPath = &path
+func collectCPUTemperature() (float64, []CPUTempSensor) {
+	if sysTempSensors == nil {
+		sysTempSensors = discoverCPUTempPath()
 	}
 
-	if *sysTempPath == "" {
-		return 0 // No temperature sensor found
+	if len(sysTempSensors) == 0 {
+		return 0, nil // No temperature sensors found
 	}
 
-	data, err := os.ReadFile(*sysTempPath)
-	if err != nil {
-		// Sensor might have disappeared or is temporarily unreadable
-		return 0
+	var primaryTemp float64
+	var sensors []CPUTempSensor
+
+	for _, sensor := range sysTempSensors {
+		data, err := os.ReadFile(sensor.Path)
+		if err != nil {
+			continue
+		}
+
+		valStr := strings.TrimSpace(string(data))
+		tempMilliC := parseUint(valStr, 10, 64, "cpu.temp")
+		if tempMilliC == 0 && valStr != "0" {
+			continue
+		}
+
+		tempC := round2(float64(tempMilliC) / 1000.0)
+
+		sensors = append(sensors, CPUTempSensor{
+			Name:  sensor.Name,
+			Value: tempC,
+		})
 	}
 
-	// Usually in millidegrees Celsius
-	valStr := strings.TrimSpace(string(data))
-	tempMilliC := parseUint(valStr, 10, 64, "cpu.temp")
-	if tempMilliC == 0 && valStr != "0" {
-		return 0
+	// Filter out synthetic Tctl (thermal pressure) if we have physical sensors like Tccd or Tdie
+	var hasPhysicalAMD bool
+	for _, s := range sensors {
+		if strings.HasPrefix(s.Name, "Tccd") || s.Name == "Tdie" {
+			hasPhysicalAMD = true
+			break
+		}
 	}
 
-	return round2(float64(tempMilliC) / 1000.0)
+	if hasPhysicalAMD {
+		var filtered []CPUTempSensor
+		for _, s := range sensors {
+			if s.Name != "Tctl" {
+				filtered = append(filtered, s)
+			}
+		}
+		sensors = filtered
+	}
+
+	// Make the first sensor (often Tctl or temp1_input on others) the primary temperature
+	if primaryTemp == 0 && len(sensors) > 0 {
+		// Prefer a package/control/die temperature for primary if multiple exist, otherwise just use the first
+		for _, s := range sensors {
+			sNameLow := strings.ToLower(s.Name)
+			if s.Name == "Tctl" || s.Name == "Tdie" || strings.Contains(sNameLow, "package") {
+				primaryTemp = s.Value
+				break
+			}
+		}
+		if primaryTemp == 0 {
+			primaryTemp = sensors[0].Value
+		}
+	}
+
+	return primaryTemp, sensors
 }
 
-// discoverCPUTempPath attempts to find a file containing the CPU temperature.
-func discoverCPUTempPath() string {
+// discoverCPUTempPath attempts to find files containing CPU temperatures.
+func discoverCPUTempPath() []sysSensor {
+	var sensors []sysSensor
+
 	// 1. Try hwmon (usually more reliable on x86, e.g. coretemp, k10temp, zenpower)
 	hwmonPath := filepath.Join(sysPath, "class", "hwmon")
 	entries, err := os.ReadDir(hwmonPath)
@@ -199,11 +249,31 @@ func discoverCPUTempPath() string {
 
 			// Common CPU temperature drivers
 			if name == "coretemp" || name == "k10temp" || name == "zenpower" || name == "cpu_thermal" {
-				// Find the input file, usually temp1_input
-				// We can just scan for temp*_input
+				// We can just scan for all temp*_input
 				inputs, _ := filepath.Glob(filepath.Join(dir, "temp*_input"))
-				if len(inputs) > 0 {
-					return inputs[0] // Return the first one found
+				for _, input := range inputs {
+					sensorName := name
+					prefix := strings.TrimSuffix(filepath.Base(input), "_input")
+
+					// Look for corresponding label to get names like Tctl, Tccd1
+					labelFile := filepath.Join(dir, prefix+"_label")
+					if labelData, err := os.ReadFile(labelFile); err == nil {
+						lbl := strings.TrimSpace(string(labelData))
+						if lbl != "" {
+							sensorName = lbl
+						}
+					} else {
+						// If no label, use Name + prefix (e.g. coretemp_temp1)
+						sensorName = fmt.Sprintf("%s_%s", name, prefix)
+					}
+
+					sensors = append(sensors, sysSensor{
+						Name: sensorName,
+						Path: input,
+					})
+				}
+				if len(sensors) > 0 {
+					return sensors // Found our sensors
 				}
 			}
 		}
@@ -230,19 +300,31 @@ func discoverCPUTempPath() string {
 			if strings.Contains(strings.ToLower(typ), "cpu") || strings.Contains(strings.ToLower(typ), "pkg_temp") {
 				tempFile := filepath.Join(dir, "temp")
 				if _, err := os.Stat(tempFile); err == nil {
-					return tempFile
+					sensors = append(sensors, sysSensor{
+						Name: typ,
+						Path: tempFile,
+					})
 				}
 			}
+		}
+
+		if len(sensors) > 0 {
+			return sensors
 		}
 
 		// Fallback: If no explicit 'cpu' type is found, thermal_zone0 is often the main CPU temp
 		temp0 := filepath.Join(thermalPath, "thermal_zone0", "temp")
 		if _, err := os.Stat(temp0); err == nil {
-			return temp0
+			sensors = append(sensors, sysSensor{
+				Name: "thermal_zone0",
+				Path: temp0,
+			})
+			return sensors
 		}
 	}
 
-	return ""
+	// Ensure we return an initialized slice so we don't try to detect over and over if none found
+	return make([]sysSensor, 0)
 }
 
 func collectMemory() MemoryStats {

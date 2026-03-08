@@ -412,6 +412,23 @@ func (s *Store) aggregateSamples(samples []*collector.Sample, dur time.Duration)
 		}
 		avg.CPU.Total.Usage = totalCPU / float64(len(samples))
 
+		// Average CPU Temperature Sensors
+		for i := range avg.CPU.Sensors {
+			var tempSum float64
+			count := 0
+			for _, s := range samples {
+				for _, sens := range s.CPU.Sensors {
+					if sens.Name == avg.CPU.Sensors[i].Name {
+						tempSum += sens.Value
+						count++
+					}
+				}
+			}
+			if count > 0 {
+				avg.CPU.Sensors[i].Value = tempSum / float64(count)
+			}
+		}
+
 		// Average network rates per interface
 		for i := range avg.Network.Interfaces {
 			var rxSum, txSum float64
