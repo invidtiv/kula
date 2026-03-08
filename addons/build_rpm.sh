@@ -129,6 +129,10 @@ Summary:        ${DESCRIPTION}
 License:        AGPL-3.0-or-later
 URL:            https://github.com/c0m4r/kula
 
+Requires(pre):  shadow-utils
+Provides:       user(${PKG_NAME})
+Provides:       group(${PKG_NAME})
+
 %description
 ${DESCRIPTION}
 
@@ -164,9 +168,6 @@ chmod 644 %{buildroot}/usr/lib/systemd/system/kula.service
 
 %pre
 # Pre-install script
-
-%post
-# Post-install script
 # Create kula group if it doesn't exist
 if ! getent group kula >/dev/null; then
     groupadd --system kula
@@ -177,6 +178,8 @@ if ! getent passwd kula >/dev/null; then
     useradd --system -g kula -d /var/lib/kula -s /sbin/nologin -c "Kula System Monitoring Daemon" kula
 fi
 
+%post
+# Post-install script
 # Set ownership for directories the program will use
 chown -R kula:kula /etc/kula
 chown -R kula:kula /var/lib/kula
@@ -203,6 +206,7 @@ fi
 %files
 %defattr(-,root,root,-)
 %attr(755, root, root) /usr/bin/kula
+%dir %attr(750, kula, kula) /etc/kula
 %config(noreplace) %attr(644, root, root) /etc/kula/config.example.yaml
 %attr(644, root, root) /usr/share/bash-completion/completions/kula
 %attr(644, root, root) /usr/lib/systemd/system/kula.service
