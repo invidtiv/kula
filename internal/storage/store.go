@@ -365,6 +365,167 @@ func (s *Store) Close() error {
 // aggregateSamples creates an aggregated sample from raw samples.
 // Uses the last sample's values (for gauges) and averages for rates.
 // Also tracks peak (maximum) values for CPU, disk utilisation, and network throughput.
+// minSample returns an element-wise minimum of two samples.
+func minSample(a, b *collector.Sample) *collector.Sample {
+	if a == nil {
+		return b
+	}
+	if b == nil {
+		return a
+	}
+	res := *a // copy structure and unchanged fields (like timestamps, names)
+
+	res.CPU.Total.Usage = minF(a.CPU.Total.Usage, b.CPU.Total.Usage)
+	res.CPU.Total.User = minF(a.CPU.Total.User, b.CPU.Total.User)
+	res.CPU.Total.System = minF(a.CPU.Total.System, b.CPU.Total.System)
+	res.CPU.Total.IOWait = minF(a.CPU.Total.IOWait, b.CPU.Total.IOWait)
+	res.CPU.Total.Steal = minF(a.CPU.Total.Steal, b.CPU.Total.Steal)
+	res.CPU.Temperature = minF(a.CPU.Temperature, b.CPU.Temperature)
+
+	res.LoadAvg.Load1 = minF(a.LoadAvg.Load1, b.LoadAvg.Load1)
+	res.LoadAvg.Load5 = minF(a.LoadAvg.Load5, b.LoadAvg.Load5)
+	res.LoadAvg.Load15 = minF(a.LoadAvg.Load15, b.LoadAvg.Load15)
+
+	res.Memory.Used = minU(a.Memory.Used, b.Memory.Used)
+	res.Memory.UsedPercent = minF(a.Memory.UsedPercent, b.Memory.UsedPercent)
+
+	res.Swap.Used = minU(a.Swap.Used, b.Swap.Used)
+	res.Swap.UsedPercent = minF(a.Swap.UsedPercent, b.Swap.UsedPercent)
+
+	res.Disks.Devices = make([]collector.DiskDevice, len(a.Disks.Devices))
+	for i := range a.Disks.Devices {
+		devA := a.Disks.Devices[i]
+		var devB collector.DiskDevice
+		for _, dev := range b.Disks.Devices {
+			if dev.Name == devA.Name {
+				devB = dev
+				break
+			}
+		}
+		res.Disks.Devices[i] = collector.DiskDevice{
+			Name:         devA.Name,
+			Utilization:  minF(devA.Utilization, devB.Utilization),
+			ReadBytesPS:  minF(devA.ReadBytesPS, devB.ReadBytesPS),
+			WriteBytesPS: minF(devA.WriteBytesPS, devB.WriteBytesPS),
+			ReadsPerSec:  minF(devA.ReadsPerSec, devB.ReadsPerSec),
+			WritesPerSec: minF(devA.WritesPerSec, devB.WritesPerSec),
+		}
+	}
+
+	res.Network.Interfaces = make([]collector.NetInterface, len(a.Network.Interfaces))
+	for i := range a.Network.Interfaces {
+		ifA := a.Network.Interfaces[i]
+		var ifB collector.NetInterface
+		for _, iface := range b.Network.Interfaces {
+			if iface.Name == ifA.Name {
+				ifB = iface
+				break
+			}
+		}
+		res.Network.Interfaces[i] = collector.NetInterface{
+			Name:   ifA.Name,
+			RxMbps: minF(ifA.RxMbps, ifB.RxMbps),
+			TxMbps: minF(ifA.TxMbps, ifB.TxMbps),
+			RxPPS:  minF(ifA.RxPPS, ifB.RxPPS),
+			TxPPS:  minF(ifA.TxPPS, ifB.TxPPS),
+		}
+	}
+	return &res
+}
+
+// maxSample returns an element-wise maximum of two samples.
+func maxSample(a, b *collector.Sample) *collector.Sample {
+	if a == nil {
+		return b
+	}
+	if b == nil {
+		return a
+	}
+	res := *a // copy structure
+
+	res.CPU.Total.Usage = maxF(a.CPU.Total.Usage, b.CPU.Total.Usage)
+	res.CPU.Total.User = maxF(a.CPU.Total.User, b.CPU.Total.User)
+	res.CPU.Total.System = maxF(a.CPU.Total.System, b.CPU.Total.System)
+	res.CPU.Total.IOWait = maxF(a.CPU.Total.IOWait, b.CPU.Total.IOWait)
+	res.CPU.Total.Steal = maxF(a.CPU.Total.Steal, b.CPU.Total.Steal)
+	res.CPU.Temperature = maxF(a.CPU.Temperature, b.CPU.Temperature)
+
+	res.LoadAvg.Load1 = maxF(a.LoadAvg.Load1, b.LoadAvg.Load1)
+	res.LoadAvg.Load5 = maxF(a.LoadAvg.Load5, b.LoadAvg.Load5)
+	res.LoadAvg.Load15 = maxF(a.LoadAvg.Load15, b.LoadAvg.Load15)
+
+	res.Memory.Used = maxU(a.Memory.Used, b.Memory.Used)
+	res.Memory.UsedPercent = maxF(a.Memory.UsedPercent, b.Memory.UsedPercent)
+
+	res.Swap.Used = maxU(a.Swap.Used, b.Swap.Used)
+	res.Swap.UsedPercent = maxF(a.Swap.UsedPercent, b.Swap.UsedPercent)
+
+	res.Disks.Devices = make([]collector.DiskDevice, len(a.Disks.Devices))
+	for i := range a.Disks.Devices {
+		devA := a.Disks.Devices[i]
+		var devB collector.DiskDevice
+		for _, dev := range b.Disks.Devices {
+			if dev.Name == devA.Name {
+				devB = dev
+				break
+			}
+		}
+		res.Disks.Devices[i] = collector.DiskDevice{
+			Name:         devA.Name,
+			Utilization:  maxF(devA.Utilization, devB.Utilization),
+			ReadBytesPS:  maxF(devA.ReadBytesPS, devB.ReadBytesPS),
+			WriteBytesPS: maxF(devA.WriteBytesPS, devB.WriteBytesPS),
+			ReadsPerSec:  maxF(devA.ReadsPerSec, devB.ReadsPerSec),
+			WritesPerSec: maxF(devA.WritesPerSec, devB.WritesPerSec),
+		}
+	}
+
+	res.Network.Interfaces = make([]collector.NetInterface, len(a.Network.Interfaces))
+	for i := range a.Network.Interfaces {
+		ifA := a.Network.Interfaces[i]
+		var ifB collector.NetInterface
+		for _, iface := range b.Network.Interfaces {
+			if iface.Name == ifA.Name {
+				ifB = iface
+				break
+			}
+		}
+		res.Network.Interfaces[i] = collector.NetInterface{
+			Name:   ifA.Name,
+			RxMbps: maxF(ifA.RxMbps, ifB.RxMbps),
+			TxMbps: maxF(ifA.TxMbps, ifB.TxMbps),
+			RxPPS:  maxF(ifA.RxPPS, ifB.RxPPS),
+			TxPPS:  maxF(ifA.TxPPS, ifB.TxPPS),
+		}
+	}
+	return &res
+}
+
+func minF(a, b float64) float64 {
+	if a < b {
+		return a
+	}
+	return b
+}
+func maxF(a, b float64) float64 {
+	if a > b {
+		return a
+	}
+	return b
+}
+func minU(a, b uint64) uint64 {
+	if a < b {
+		return a
+	}
+	return b
+}
+func maxU(a, b uint64) uint64 {
+	if a > b {
+		return a
+	}
+	return b
+}
+
 func (s *Store) aggregateSamples(samples []*collector.Sample, dur time.Duration) *AggregatedSample {
 	if len(samples) == 0 {
 		return nil
@@ -375,42 +536,42 @@ func (s *Store) aggregateSamples(samples []*collector.Sample, dur time.Duration)
 
 	avg := *last
 
-	var peakCPU, peakTemp, peakDiskUtil, peakRx, peakTx float64
+	var minS, maxS *collector.Sample
 
 	if len(samples) > 1 {
-		var totalCPU float64
+		// Initialize min/max with a deep copy of the first element
+		first := *samples[0]
+		minS = &first
+		firstMax := *samples[0]
+		maxS = &firstMax
+
+		var totalCPUUsage, totalCPUUser, totalCPUSys, totalCPUIowait, totalCPUSteal float64
+		var totalLoad1, totalLoad5, totalLoad15 float64
 		for _, s := range samples {
-			totalCPU += s.CPU.Total.Usage
-			if s.CPU.Total.Usage > peakCPU {
-				peakCPU = s.CPU.Total.Usage
-			}
-			if s.CPU.Temperature > peakTemp {
-				peakTemp = s.CPU.Temperature
-			}
+			totalCPUUsage += s.CPU.Total.Usage
+			totalCPUUser += s.CPU.Total.User
+			totalCPUSys += s.CPU.Total.System
+			totalCPUIowait += s.CPU.Total.IOWait
+			totalCPUSteal += s.CPU.Total.Steal
 
-			// Peak disk utilisation across all devices in this sample
-			for _, dev := range s.Disks.Devices {
-				if dev.Utilization > peakDiskUtil {
-					peakDiskUtil = dev.Utilization
-				}
-			}
+			totalLoad1 += s.LoadAvg.Load1
+			totalLoad5 += s.LoadAvg.Load5
+			totalLoad15 += s.LoadAvg.Load15
 
-			// Peak network throughput (summed across non-loopback interfaces)
-			var rx, tx float64
-			for _, iface := range s.Network.Interfaces {
-				if iface.Name != "lo" {
-					rx += iface.RxMbps
-					tx += iface.TxMbps
-				}
-			}
-			if rx > peakRx {
-				peakRx = rx
-			}
-			if tx > peakTx {
-				peakTx = tx
-			}
+			minS = minSample(minS, s)
+			maxS = maxSample(maxS, s)
 		}
-		avg.CPU.Total.Usage = totalCPU / float64(len(samples))
+
+		fLen := float64(len(samples))
+		avg.CPU.Total.Usage = totalCPUUsage / fLen
+		avg.CPU.Total.User = totalCPUUser / fLen
+		avg.CPU.Total.System = totalCPUSys / fLen
+		avg.CPU.Total.IOWait = totalCPUIowait / fLen
+		avg.CPU.Total.Steal = totalCPUSteal / fLen
+
+		avg.LoadAvg.Load1 = totalLoad1 / fLen
+		avg.LoadAvg.Load5 = totalLoad5 / fLen
+		avg.LoadAvg.Load15 = totalLoad15 / fLen
 
 		// Average CPU Temperature Sensors
 		for i := range avg.CPU.Sensors {
@@ -431,13 +592,15 @@ func (s *Store) aggregateSamples(samples []*collector.Sample, dur time.Duration)
 
 		// Average network rates per interface
 		for i := range avg.Network.Interfaces {
-			var rxSum, txSum float64
+			var rxSum, txSum, rxPpsSum, txPpsSum float64
 			count := 0
 			for _, s := range samples {
 				for _, iface := range s.Network.Interfaces {
 					if iface.Name == avg.Network.Interfaces[i].Name {
 						rxSum += iface.RxMbps
 						txSum += iface.TxMbps
+						rxPpsSum += iface.RxPPS
+						txPpsSum += iface.TxPPS
 						count++
 					}
 				}
@@ -445,34 +608,47 @@ func (s *Store) aggregateSamples(samples []*collector.Sample, dur time.Duration)
 			if count > 0 {
 				avg.Network.Interfaces[i].RxMbps = rxSum / float64(count)
 				avg.Network.Interfaces[i].TxMbps = txSum / float64(count)
+				avg.Network.Interfaces[i].RxPPS = rxPpsSum / float64(count)
+				avg.Network.Interfaces[i].TxPPS = txPpsSum / float64(count)
+			}
+		}
+
+		// Average Disk I/O rates per device
+		for i := range avg.Disks.Devices {
+			var rBpsSum, wBpsSum, rIopsSum, wIopsSum float64
+			count := 0
+			for _, s := range samples {
+				for _, dev := range s.Disks.Devices {
+					if dev.Name == avg.Disks.Devices[i].Name {
+						rBpsSum += dev.ReadBytesPS
+						wBpsSum += dev.WriteBytesPS
+						rIopsSum += dev.ReadsPerSec
+						wIopsSum += dev.WritesPerSec
+						count++
+					}
+				}
+			}
+			if count > 0 {
+				avg.Disks.Devices[i].ReadBytesPS = rBpsSum / float64(count)
+				avg.Disks.Devices[i].WriteBytesPS = wBpsSum / float64(count)
+				avg.Disks.Devices[i].ReadsPerSec = rIopsSum / float64(count)
+				avg.Disks.Devices[i].WritesPerSec = wIopsSum / float64(count)
 			}
 		}
 	} else {
-		// Single sample — peaks equal the observed values
-		peakCPU = last.CPU.Total.Usage
-		peakTemp = last.CPU.Temperature
-		for _, dev := range last.Disks.Devices {
-			if dev.Utilization > peakDiskUtil {
-				peakDiskUtil = dev.Utilization
-			}
-		}
-		for _, iface := range last.Network.Interfaces {
-			if iface.Name != "lo" {
-				peakRx += iface.RxMbps
-				peakTx += iface.TxMbps
-			}
-		}
+		// Single sample — min and max equal the observed values
+		minCopy := *last
+		minS = &minCopy
+		maxCopy := *last
+		maxS = &maxCopy
 	}
 
 	return &AggregatedSample{
-		Timestamp:    last.Timestamp,
-		Duration:     dur,
-		Data:         &avg,
-		PeakCPU:      &peakCPU,
-		PeakTemp:     &peakTemp,
-		PeakDiskUtil: &peakDiskUtil,
-		PeakRxMbps:   &peakRx,
-		PeakTxMbps:   &peakTx,
+		Timestamp: last.Timestamp,
+		Duration:  dur,
+		Data:      &avg,
+		Min:       minS,
+		Max:       maxS,
 	}
 }
 
@@ -492,45 +668,46 @@ func (s *Store) aggregateAggregated(samples []*AggregatedSample, dur time.Durati
 		return nil
 	}
 
-	// Peaks over sub-aggregated samples are the max of their own peak fields,
-	// which already captured the true maxima of their respective windows.
-	// We only recompute peaks if the incoming samples actually have peak data.
-	hasAggregatedPeaks := false
+	hasAggregatedMinMax := false
 	for _, s := range samples {
-		if s.PeakCPU != nil {
-			hasAggregatedPeaks = true
+		if s.Min != nil || s.Max != nil {
+			hasAggregatedMinMax = true
 			break
 		}
 	}
 
-	if !hasAggregatedPeaks {
+	if !hasAggregatedMinMax {
 		// These are raw tier-0 samples, aggregateSamples already computed
-		// the true peaks accurately. Return it as is.
+		// the true min and max accurately. Return it as is.
 		return result
 	}
 
-	var peakCPU, peakTemp, peakDiskUtil, peakRx, peakTx float64
-	for _, s := range samples {
-		if s.PeakCPU != nil && *s.PeakCPU > peakCPU {
-			peakCPU = *s.PeakCPU
+	var minS, maxS *collector.Sample
+	if len(samples) > 0 {
+		minS = samples[0].Min
+		if minS == nil {
+			minS = samples[0].Data
 		}
-		if s.PeakTemp != nil && *s.PeakTemp > peakTemp {
-			peakTemp = *s.PeakTemp
-		}
-		if s.PeakDiskUtil != nil && *s.PeakDiskUtil > peakDiskUtil {
-			peakDiskUtil = *s.PeakDiskUtil
-		}
-		if s.PeakRxMbps != nil && *s.PeakRxMbps > peakRx {
-			peakRx = *s.PeakRxMbps
-		}
-		if s.PeakTxMbps != nil && *s.PeakTxMbps > peakTx {
-			peakTx = *s.PeakTxMbps
+		maxS = samples[0].Max
+		if maxS == nil {
+			maxS = samples[0].Data
 		}
 	}
-	result.PeakCPU = &peakCPU
-	result.PeakTemp = &peakTemp
-	result.PeakDiskUtil = &peakDiskUtil
-	result.PeakRxMbps = &peakRx
-	result.PeakTxMbps = &peakTx
+
+	for _, s := range samples {
+		candMin := s.Min
+		if candMin == nil {
+			candMin = s.Data
+		}
+		candMax := s.Max
+		if candMax == nil {
+			candMax = s.Data
+		}
+		minS = minSample(minS, candMin)
+		maxS = maxSample(maxS, candMax)
+	}
+
+	result.Min = minS
+	result.Max = maxS
 	return result
 }

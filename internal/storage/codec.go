@@ -10,17 +10,14 @@ import (
 
 // AggregatedSample holds a time-aggregated metric sample.
 // For tier 1 (1s), this is just a wrapper around the raw sample.
-// For higher tiers, Data holds averaged values and Peak* fields hold
-// the maximum observed values over the aggregation window.
+// For higher tiers, Data holds averaged values and Min/Max fields hold
+// the minimum and maximum observed values over the aggregation window.
 type AggregatedSample struct {
-	Timestamp    time.Time         `json:"ts"`
-	Duration     time.Duration     `json:"dur"`
-	Data         *collector.Sample `json:"data"`
-	PeakCPU      *float64          `json:"peak_cpu,omitempty"`
-	PeakTemp     *float64          `json:"peak_temp,omitempty"`
-	PeakDiskUtil *float64          `json:"peak_disk_util,omitempty"`
-	PeakRxMbps   *float64          `json:"peak_rx_mbps,omitempty"`
-	PeakTxMbps   *float64          `json:"peak_tx_mbps,omitempty"`
+	Timestamp time.Time         `json:"ts"`
+	Duration  time.Duration     `json:"dur"`
+	Data      *collector.Sample `json:"data"`
+	Min       *collector.Sample `json:"min,omitempty"`
+	Max       *collector.Sample `json:"max,omitempty"`
 }
 
 func encodeSample(s *AggregatedSample) ([]byte, error) {

@@ -9,11 +9,9 @@ import (
 // ---- helpers ----------------------------------------------------------------
 
 func makeSampleFull(ts time.Time) *AggregatedSample {
-	cpu := 42.5
 	return &AggregatedSample{
 		Timestamp: ts,
 		Duration:  time.Second,
-		PeakCPU:   &cpu,
 		Data: &collector.Sample{
 			Timestamp: ts,
 			CPU: collector.CPUStats{
@@ -96,12 +94,6 @@ func TestEncodeDecode(t *testing.T) {
 	}
 	if decoded.Data.Memory.Shmem != original.Data.Memory.Shmem {
 		t.Errorf("Memory Shmem = %d, want %d", decoded.Data.Memory.Shmem, original.Data.Memory.Shmem)
-	}
-	if decoded.PeakCPU == nil {
-		t.Fatal("PeakCPU is nil after decode")
-	}
-	if *decoded.PeakCPU != *original.PeakCPU {
-		t.Errorf("PeakCPU = %f, want %f", *decoded.PeakCPU, *original.PeakCPU)
 	}
 	// Network TCP stats survive round-trip
 	if decoded.Data.Network.TCP.CurrEstab != original.Data.Network.TCP.CurrEstab {

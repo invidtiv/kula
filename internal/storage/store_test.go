@@ -554,11 +554,11 @@ func TestMultiTierPeakPreservation(t *testing.T) {
 		t.Fatal("No samples in tier 2")
 	}
 	agg := samples[0]
-	if agg.PeakCPU == nil {
-		t.Fatal("PeakCPU is nil in aggregated sample")
+	if agg.Max == nil {
+		t.Fatal("Max is nil in aggregated sample")
 	}
-	if *agg.PeakCPU < peakUsage-0.1 {
-		t.Errorf("PeakCPU = %.2f, want >= %.2f (spike should be preserved)", *agg.PeakCPU, peakUsage)
+	if agg.Max.CPU.Total.Usage < peakUsage-0.1 {
+		t.Errorf("Max CPU = %.2f, want >= %.2f (spike should be preserved)", agg.Max.CPU.Total.Usage, peakUsage)
 	}
 }
 

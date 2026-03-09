@@ -39,6 +39,7 @@
         theme: localStorage.getItem('kula_theme') || 'dark',
         diskSpaceMountNames: [], // mount names matching diskspace chart datasets
         cpuTempSensorNames: [], // sensor names matching cpu temp chart datasets
+        currentAggregation: localStorage.getItem('kula_aggregation') || 'avg',
     };
 
     // ---- Color Palette ----
@@ -254,11 +255,9 @@
             { label: 'Total', borderColor: colors.cyan, data: [], fill: false, borderWidth: 2 },
         ], { max: 100, ticks: { callback: v => v + '%' } });
 
-        // CPU Temperature - dynamically constructed on first sample if sensors exist
         state.cpuTempSensorNames = [];
         state.charts.cputemp = createTimeSeriesChart('chart-cpu-temp', [
             { label: 'Temperature', borderColor: colors.orange, backgroundColor: colors.orangeAlpha, fill: true, data: [] },
-            { label: 'Peak Temp', borderColor: colors.red, data: [], fill: false, borderDash: [4, 2] },
         ], { ticks: { callback: v => v.toFixed(1) + '°C' } });
 
         // Load Average
@@ -284,13 +283,11 @@
             { label: 'Free', borderColor: colors.teal, data: [], fill: false, borderDash: [4, 2] },
         ], { min: 0, ticks: { callback: v => formatBytesShort(v) } });
 
-        // Network
         state.charts.network = createTimeSeriesChart('chart-network', [
             { label: '↓ RX', borderColor: colors.cyan, backgroundColor: colors.cyanAlpha, fill: true, data: [] },
             { label: '↑ TX', borderColor: colors.pink, backgroundColor: colors.pinkAlpha, fill: true, data: [] },
         ], { ticks: { callback: v => v.toFixed(1) + ' Mbps' } });
 
-        // Packets per second
         state.charts.pps = createTimeSeriesChart('chart-pps', [
             { label: '↓ RX pps', borderColor: colors.green, backgroundColor: colors.greenAlpha, fill: true, data: [] },
             { label: '↑ TX pps', borderColor: colors.orange, backgroundColor: colors.orangeAlpha, fill: true, data: [] },
@@ -308,7 +305,6 @@
             { label: 'OutRsts', borderColor: colors.orange, data: [], fill: false, borderDash: [4, 2] },
         ]);
 
-        // Disk I/O — bandwidth + IOPS
         state.charts.diskio = createTimeSeriesChart('chart-disk-io', [
             { label: 'Read B/s', borderColor: colors.green, backgroundColor: colors.greenAlpha, fill: true, data: [], yAxisID: 'y' },
             { label: 'Write B/s', borderColor: colors.orange, backgroundColor: colors.orangeAlpha, fill: true, data: [], yAxisID: 'y' },
@@ -411,7 +407,10 @@
 
     // ---- Data Update ----
     function addSampleToCharts(item, ts) {
-        const s = item.data || item;
+        let s = item.data || item;
+        if (state.currentAggregation === 'min' && item.min) s = item.min;
+        if (state.currentAggregation === 'max' && item.max) s = item.max;
+
         const point = (v) => ({ x: ts, y: v });
 
         // CPU
@@ -420,10 +419,7 @@
             state.charts.cpu.data.datasets[1].data.push(point(s.cpu.total.system));
             state.charts.cpu.data.datasets[2].data.push(point(s.cpu.total.iowait));
             state.charts.cpu.data.datasets[3].data.push(point(s.cpu.total.steal));
-
-            // Show peak CPU for total usage to preserve spikes
-            const usageVal = item.peak_cpu !== undefined ? item.peak_cpu : s.cpu.total.usage;
-            state.charts.cpu.data.datasets[4].data.push(point(usageVal));
+            state.charts.cpu.data.datasets[4].data.push(point(s.cpu.total.usage));
         }
 
         // CPU Temperature
@@ -461,17 +457,14 @@
                     }
                 });
             } else {
-                // Fallback to plain Temperature and Peak Temp if no sensors array
-                if (state.charts.cputemp.data.datasets.length !== 2 || state.charts.cputemp.data.datasets[0].label !== 'Temperature') {
+                // Fallback to plain Temperature if no sensors array
+                if (state.charts.cputemp.data.datasets.length !== 1 || state.charts.cputemp.data.datasets[0].label !== 'Temperature') {
                     state.cpuTempSensorNames = [];
                     state.charts.cputemp.data.datasets = [
                         { label: 'Temperature', borderColor: colors.orange, backgroundColor: colors.orangeAlpha, fill: true, data: [] },
-                        { label: 'Peak Temp', borderColor: colors.red, data: [], fill: false, borderDash: [4, 2] },
                     ];
                 }
                 state.charts.cputemp.data.datasets[0].data.push(point(s.cpu.temp));
-                const tempVal = item.peak_temp !== undefined ? item.peak_temp : s.cpu.temp;
-                state.charts.cputemp.data.datasets[1].data.push(point(tempVal));
             }
         } else if (tempCard && !tempCard.classList.contains('hidden')) {
             tempCard.classList.add('hidden');
@@ -513,11 +506,8 @@
             let rx = 0, tx = 0;
             s.net.ifaces.forEach(i => { if (i.name !== 'lo') { rx += i.rx_mbps || 0; tx += i.tx_mbps || 0; } });
 
-            const finalRx = item.peak_rx_mbps !== undefined ? item.peak_rx_mbps : rx;
-            const finalTx = item.peak_tx_mbps !== undefined ? item.peak_tx_mbps : tx;
-
-            state.charts.network.data.datasets[0].data.push(point(finalRx));
-            state.charts.network.data.datasets[1].data.push(point(finalTx));
+            state.charts.network.data.datasets[0].data.push(point(rx));
+            state.charts.network.data.datasets[1].data.push(point(tx));
         }
 
         // Packets per second (sum non-lo)
@@ -1204,10 +1194,10 @@
                         addGapToCharts(new Date(item.ts));
                         return;
                     }
-                    const sample = item.data || item;
-                    const ts = new Date(sample.ts);
-                    state.dataBuffer.push(sample);
-                    addSampleToCharts(sample, ts);
+                    const timestampSrc = item.data || item;
+                    const ts = new Date(timestampSrc.ts || item.ts);
+                    state.dataBuffer.push(item);
+                    addSampleToCharts(item, ts);
                 });
 
                 // Trim buffer
@@ -1220,8 +1210,8 @@
                 updateAllCharts();
 
                 // Update gauges/header with latest sample
-                const lastSample = data[data.length - 1];
-                const s = lastSample.data || lastSample;
+                const lastItem = data[data.length - 1];
+                const s = lastItem.data || lastItem;
                 state.lastSample = s;
                 updateGauges(s);
                 updateHeader(s);
@@ -1267,18 +1257,18 @@
                             addGapToCharts(new Date(item.ts));
                             return;
                         }
-                        const sample = item.data || item;
-                        const ts = new Date(sample.ts);
-                        state.dataBuffer.push(sample);
-                        addSampleToCharts(sample, ts);
+                        const timestampSrc = item.data || item;
+                        const ts = new Date(timestampSrc.ts || item.ts);
+                        state.dataBuffer.push(item);
+                        addSampleToCharts(item, ts);
                     });
 
                     if (state.dataBuffer.length > state.maxBufferSize) {
                         state.dataBuffer = state.dataBuffer.slice(-state.maxBufferSize);
                     }
 
-                    const lastSample = data[data.length - 1];
-                    const s = lastSample.data || lastSample;
+                    const lastItem = data[data.length - 1];
+                    const s = lastItem.data || lastItem;
                     state.lastSample = s;
                     updateGauges(s);
                     updateHeader(s);
@@ -1814,6 +1804,31 @@
                 }
             });
         });
+
+        // Aggregation logic
+        document.querySelectorAll('#agg-presets-list .time-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                document.querySelectorAll('#agg-presets-list .time-btn').forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+                state.currentAggregation = btn.dataset.agg;
+                localStorage.setItem('kula_aggregation', state.currentAggregation);
+
+                // Redraw charts with new aggregation
+                clearAllChartData();
+                state.dataBuffer.forEach(item => {
+                    const timestampSrc = item.data || item;
+                    const ts = new Date(timestampSrc.ts || item.ts);
+                    addSampleToCharts(item, ts);
+                });
+                updateAllCharts();
+            });
+        });
+
+        // Initialize active aggregation button
+        const aggBtns = document.querySelectorAll('#agg-presets-list .time-btn');
+        aggBtns.forEach(b => b.classList.remove('active'));
+        const activeAggBtn = document.querySelector(`#agg-presets-list .time-btn[data-agg="${state.currentAggregation}"]`);
+        if (activeAggBtn) activeAggBtn.classList.add('active');
 
         // Double-click on any chart to reset zoom
         document.querySelectorAll('.chart-body canvas').forEach(canvas => {
