@@ -2,8 +2,31 @@
 
 set -e
 
-VERSION="0.7.2"
 GITHUB_REPO="c0m4r/kula"
+
+if command -v curl >/dev/null; then
+    VERSION=$(curl -sI "https://github.com/${GITHUB_REPO}/releases/latest" | grep -i 'location:' | sed -E 's|.*/tag/([^[:space:]]+).*|\1|' | tail -n1 | tr -d '\r')
+elif command -v wget >/dev/null; then
+    VERSION=$(wget --server-response --max-redirect=0 "https://github.com/${GITHUB_REPO}/releases/latest" 2>&1 | grep -i 'location:' | sed -E 's|.*/tag/([^[:space:]]+).*|\1|' | tail -n1 | tr -d '\r')
+else
+    echo -e "\033[0;31mError: Neither curl nor wget is installed.\033[0m"
+    exit 1
+fi
+
+if [ -z "$VERSION" ]; then
+    echo -e "\033[0;31mError: Failed to fetch the latest version.\033[0m"
+    exit 1
+fi
+
+if [[ ! "$VERSION" =~ ^[a-zA-Z0-9.-]+$ ]]; then
+    echo -e "\033[0;31mError: Invalid version format received: $VERSION\033[0m"
+    exit 1
+fi
+
+# Secure Temp Directory allocation
+SECURE_TMP=$(mktemp -d /tmp/kula-install-XXXXXX)
+trap 'rm -rf "$SECURE_TMP"' EXIT
+
 RELEASE_URL="https://github.com/${GITHUB_REPO}/releases/download/${VERSION}"
 
 # Define colors
@@ -19,27 +42,6 @@ echo -e "${CYAN}      kula - system monitoring daemon      ${NC}"
 echo -e "${CYAN}===========================================${NC}"
 echo -e "Version: ${VERSION}"
 echo ""
-
-# BETA WARNING
-echo -e "${YELLOW}Warning: This script is in beta and might not work as expected.${NC}"
-echo ""
-
-read -p "Do you want to continue? [y/N] " -n 1 -r
-echo
-if [[ ! $REPLY =~ ^[Yy]$ ]]; then
-    echo -e "${RED}Installation aborted.${NC}"
-    exit 1
-fi
-
-# Hashes mapping
-declare -A HASHES
-HASHES["kula-0.7.2-amd64.deb"]="51be1330fff5262a6541f1c60b749593abfc4dc82cb322a41d1ae2b15c81f758"
-HASHES["kula-0.7.2-amd64.tar.gz"]="8fd7ec391db8245d3988b3f50aa013d02df7b14d3de06d35b175099f7a52e064"
-HASHES["kula-0.7.2-arm64.deb"]="f91694ae18c7523d5c3c54f8fbb272cbe42c24ae456dc0611eb1b2b6f093f5d9"
-HASHES["kula-0.7.2-arm64.tar.gz"]="7e91291368de3445cc445a8153f7d31c93a61196b062ec1781d8c7219685fe36"
-HASHES["kula-0.7.2-aur.tar.gz"]="5d3882fd0c4d46e08ae6d70e848960505eb0997cf816982af9e99480fad8f24e"
-HASHES["kula-0.7.2-riscv64.deb"]="1c5a5fa3dab2eea8246735709ac6c98825d6432dad5bd73fe80d62000c51483d"
-HASHES["kula-0.7.2-riscv64.tar.gz"]="f56d659bc07143d49af560a37b87ab7c1e1bb090188765e3fb3f09d1a267e0d2"
 
 # Detect Architecture
 ARCH=$(uname -m)
@@ -81,14 +83,8 @@ echo -e "Detected Init System: ${GREEN}${INIT_SYSTEM}${NC}"
 # Download function
 download_and_verify() {
     local filename=$1
-    local expected_hash=${HASHES[$filename]}
-    local target="/tmp/$filename"
+    local target="$SECURE_TMP/$filename"
     local url="${RELEASE_URL}/${filename}"
-
-    if [ -z "$expected_hash" ]; then
-        echo -e "${RED}Error: No hash found for $filename. This version might not support your platform yet.${NC}"
-        exit 1
-    fi
 
     echo -e "${BLUE}Downloading $filename...${NC}" >&2
     if command -v curl >/dev/null; then
@@ -96,26 +92,46 @@ download_and_verify() {
     elif command -v wget >/dev/null; then
         wget -qO "$target" "$url"
     else
-        echo -e "${RED}Error: Neither curl nor wget is installed.${NC}"
+        echo -e "${RED}Error: Neither curl nor wget is installed.${NC}" >&2
         exit 1
     fi
 
-    echo -e "${BLUE}Checking SHA256 sum...${NC}" >&2
-    local actual_hash
-    if command -v sha256sum >/dev/null; then
-        actual_hash=$(sha256sum "$target" | awk '{print $1}')
-    else
-        actual_hash=$(shasum -a 256 "$target" | awk '{print $1}')
-    fi
-
-    if [ "$actual_hash" != "$expected_hash" ]; then
-        echo -e "${RED}Error: Checksum mismatch for $filename!${NC}" >&2
-        echo -e "${YELLOW}Expected: $expected_hash${NC}" >&2
-        echo -e "${YELLOW}Got:      $actual_hash${NC}" >&2
+    if [ ! -s "$target" ]; then
+        echo -e "${RED}Error: Download failed or file is empty ($url)${NC}" >&2
         rm -f "$target"
         exit 1
     fi
-    echo -e "${GREEN}Checksum verified successfully for $filename.${NC}" >&2
+
+    local actual_hash
+    if command -v sha256sum >/dev/null; then
+        echo -e "${BLUE}Calculating SHA256 sum...${NC}" >&2
+        actual_hash=$(sha256sum "$target" | awk '{print $1}')
+    else
+        echo -e "${YELLOW}Warning: sha256sum command is not available.${NC}" >&2
+        echo -ne "Do you want to skip checksum verification? [y/N] " >&2
+        read -n 1 -r < /dev/tty
+        echo >&2
+        if [[ $REPLY =~ ^[Yy]$ ]]; then
+            actual_hash="SKIPPED"
+        else
+            echo -e "${RED}Error: Checksum verification is required but sha256sum is missing.${NC}" >&2
+            rm -f "$target"
+            exit 1
+        fi
+    fi
+
+    echo -e "${CYAN}Downloaded file: ${filename}${NC}" >&2
+    echo -e "${CYAN}SHA256 sum:      ${actual_hash}${NC}" >&2
+
+    echo -ne "Do you want to proceed with this installation? [y/N] " >&2
+    read -n 1 -r < /dev/tty
+    echo >&2
+    if [[ ! $REPLY =~ ^[Yy]$ ]]; then
+        echo -e "${RED}Installation aborted by user.${NC}" >&2
+        rm -f "$target"
+        exit 1
+    fi
+
     echo "$target"
 }
 
@@ -147,18 +163,20 @@ if [[ ! $REPLY =~ ^[Yy]$ ]]; then
     exit 1
 fi
 
-installer_sudo=""
-if [ "$(id -u)" -ne 0 ]; then
-    if command -v sudo >/dev/null; then
-        installer_sudo="sudo"
+exec_as_root() {
+    if [ "$(id -u)" -eq 0 ]; then
+        "$@"
+    elif command -v sudo >/dev/null; then
+        sudo "$@"
     elif command -v doas >/dev/null; then
-        installer_sudo="doas"
+        doas "$@"
     elif command -v su >/dev/null; then
-        installer_sudo="su -c"
+        su -c "$*"
     else
         echo -e "${YELLOW}Warning: You are not root and sudo is not available. Installation may fail.${NC}"
+        "$@"
     fi
-fi
+}
 
 echo ""
 
@@ -167,7 +185,7 @@ if [ "$INSTALL_METHOD" == "deb" ]; then
     filename="kula-${VERSION}-${HOST_ARCH}.deb"
     target=$(download_and_verify "$filename")
     echo -e "${BLUE}Installing Debian package...${NC}"
-    $installer_sudo dpkg -i "$target" || $installer_sudo apt-get install -f -y "$target"
+    exec_as_root dpkg -i "$target" || exec_as_root apt-get install -f -y "$target"
     rm -f "$target"
     echo -e "${GREEN}Installation successful!${NC}"
 
@@ -180,11 +198,11 @@ elif [ "$INSTALL_METHOD" == "rpm" ]; then
     target=$(download_and_verify "$filename")
     echo -e "${BLUE}Installing RPM package...${NC}"
     if command -v dnf >/dev/null; then
-        $installer_sudo dnf install -y "$target"
+        exec_as_root dnf install -y "$target"
     elif command -v yum >/dev/null; then
-        $installer_sudo yum install -y "$target"
+        exec_as_root yum install -y "$target"
     else
-        $installer_sudo rpm -ivh "$target"
+        exec_as_root rpm -ivh "$target"
     fi
     rm -f "$target"
     echo -e "${GREEN}Installation successful!${NC}"
@@ -200,15 +218,14 @@ elif [ "$INSTALL_METHOD" == "aur" ]; then
     target=$(download_and_verify "$filename")
     
     echo -e "${BLUE}Extracting and building AUR package...${NC}"
-    build_dir="/tmp/kula-aur-build"
-    rm -rf "$build_dir"
+    build_dir="$SECURE_TMP/kula-aur-build"
     mkdir -p "$build_dir"
     tar -xzf "$target" -C "$build_dir"
     
     cd "$build_dir/kula-$VERSION-aur"
     makepkg -si
     cd - >/dev/null
-    rm -rf "$build_dir" "$target"
+    rm -f "$target"
     echo -e "${GREEN}Installation successful!${NC}"
 
 elif [ "$INSTALL_METHOD" == "tarball_systemd" ]; then
@@ -216,48 +233,51 @@ elif [ "$INSTALL_METHOD" == "tarball_systemd" ]; then
     target=$(download_and_verify "$filename")
     
     echo -e "${BLUE}Installing from tarball to system directories...${NC}"
-    extract_dir="/tmp/kula_extract_$$"
+    extract_dir="$SECURE_TMP/kula_extract"
     mkdir -p "$extract_dir"
     tar -xzf "$target" -C "$extract_dir"
     
     cd "$extract_dir/kula"
-    $installer_sudo install -Dm755 kula /usr/bin/kula
-    $installer_sudo install -Dm644 addons/init/systemd/kula.service /etc/systemd/system/kula.service
-    $installer_sudo install -Dm640 config.example.yaml /etc/kula/config.example.yaml
-    $installer_sudo install -dm750 /var/lib/kula
+    exec_as_root install -Dm755 kula /usr/bin/kula
+    exec_as_root install -Dm644 addons/init/systemd/kula.service /etc/systemd/system/kula.service
+    exec_as_root install -Dm640 config.example.yaml /etc/kula/config.example.yaml
+    exec_as_root install -dm750 /var/lib/kula
     
     if ! getent group kula >/dev/null; then
-        $installer_sudo groupadd --system kula
+        exec_as_root groupadd --system kula
     fi
     if ! getent passwd kula >/dev/null; then
-        $installer_sudo useradd --system -g kula -d /var/lib/kula -s /bin/false -c "Kula System Monitoring Daemon" kula
+        exec_as_root useradd --system -g kula -d /var/lib/kula -s /bin/false -c "Kula System Monitoring Daemon" kula
     fi
-    $installer_sudo chown -R kula:kula /etc/kula /var/lib/kula
+    exec_as_root chown -R kula:kula /etc/kula /var/lib/kula
     
     echo -e "${BLUE}Reloading systemd and enabling service...${NC}"
-    $installer_sudo systemctl daemon-reload
-    $installer_sudo systemctl enable kula.service
-    $installer_sudo systemctl start kula.service
+    exec_as_root systemctl daemon-reload
+    exec_as_root systemctl enable kula.service
+    exec_as_root systemctl start kula.service
     
     cd - >/dev/null
-    rm -rf "$extract_dir" "$target"
+    rm -f "$target"
     echo -e "${GREEN}Installation successful!${NC}"
     
 elif [ "$INSTALL_METHOD" == "docker" ]; then
     echo -e "${BLUE}Docker is installed. You can run Kula via Docker container.${NC}"
     echo -e "Run the following command to start Kula:"
     echo -e "${CYAN}docker run -d --name kula --net host -v kula_data:/var/lib/kula c0m4r/kula:latest${NC}"
+    echo ""
     echo -e "To persist configuration, use volume mounts and provide your config.yaml."
-
+    echo -e "You can find more at https://hub.docker.com/r/c0m4r/kula"
+    echo ""
+    exit 0
 elif [ "$INSTALL_METHOD" == "tarball_opt" ]; then
     filename="kula-${VERSION}-${HOST_ARCH}.tar.gz"
     target=$(download_and_verify "$filename")
     
     echo -e "${BLUE}Installing to /opt/kula...${NC}"
     if [ ! -d "/opt/kula" ]; then
-        $installer_sudo mkdir -p /opt/kula
+        exec_as_root mkdir -p /opt/kula
     fi
-    $installer_sudo tar -xzf "$target" -C /opt
+    exec_as_root tar -xzf "$target" -C /opt
     
     rm -f "$target"
     echo -e "${GREEN}Extracted to /opt/kula successfully.${NC}"
