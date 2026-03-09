@@ -5,21 +5,21 @@ set -e
 GITHUB_REPO="c0m4r/kula"
 
 if command -v curl >/dev/null; then
-    VERSION=$(curl -sI "https://github.com/${GITHUB_REPO}/releases/latest" | grep -i 'location:' | sed -E 's|.*/tag/([^[:space:]]+).*|\1|' | tail -n1 | tr -d '\r')
+    KULA_VERSION=$(curl -sI "https://github.com/${GITHUB_REPO}/releases/latest" | grep -i 'location:' | sed -E 's|.*/tag/([^[:space:]]+).*|\1|' | tail -n1 | tr -d '\r')
 elif command -v wget >/dev/null; then
-    VERSION=$(wget --server-response --max-redirect=0 "https://github.com/${GITHUB_REPO}/releases/latest" 2>&1 | grep -i 'location:' | sed -E 's|.*/tag/([^[:space:]]+).*|\1|' | tail -n1 | tr -d '\r')
+    KULA_VERSION=$(wget --server-response --max-redirect=0 "https://github.com/${GITHUB_REPO}/releases/latest" 2>&1 | grep -i 'location:' | sed -E 's|.*/tag/([^[:space:]]+).*|\1|' | tail -n1 | tr -d '\r')
 else
     echo -e "\033[0;31mError: Neither curl nor wget is installed.\033[0m"
     exit 1
 fi
 
-if [ -z "$VERSION" ]; then
+if [ -z "$KULA_VERSION" ]; then
     echo -e "\033[0;31mError: Failed to fetch the latest version.\033[0m"
     exit 1
 fi
 
-if [[ ! "$VERSION" =~ ^[a-zA-Z0-9.-]+$ ]]; then
-    echo -e "\033[0;31mError: Invalid version format received: $VERSION\033[0m"
+if [[ ! "$KULA_VERSION" =~ ^[a-zA-Z0-9.-]+$ ]]; then
+    echo -e "\033[0;31mError: Invalid version format received: $KULA_VERSION\033[0m"
     exit 1
 fi
 
@@ -27,7 +27,7 @@ fi
 SECURE_TMP=$(mktemp -d /tmp/kula-install-XXXXXX)
 trap 'rm -rf "$SECURE_TMP"' EXIT
 
-RELEASE_URL="https://github.com/${GITHUB_REPO}/releases/download/${VERSION}"
+RELEASE_URL="https://github.com/${GITHUB_REPO}/releases/download/${KULA_VERSION}"
 
 # Define colors
 RED='\033[0;31m'
@@ -40,7 +40,7 @@ NC='\033[0m'
 echo -e "${CYAN}===========================================${NC}"
 echo -e "${CYAN}      kula - system monitoring daemon      ${NC}"
 echo -e "${CYAN}===========================================${NC}"
-echo -e "Version: ${VERSION}"
+echo -e "Version: ${KULA_VERSION}"
 echo ""
 
 # Detect Architecture
@@ -182,7 +182,7 @@ echo ""
 
 # Execute installation
 if [ "$INSTALL_METHOD" == "deb" ]; then
-    filename="kula-${VERSION}-${HOST_ARCH}.deb"
+    filename="kula-${KULA_VERSION}-${HOST_ARCH}.deb"
     target=$(download_and_verify "$filename")
     echo -e "${BLUE}Installing Debian package...${NC}"
     exec_as_root dpkg -i "$target" || exec_as_root apt-get install -f -y "$target"
@@ -194,7 +194,7 @@ elif [ "$INSTALL_METHOD" == "rpm" ]; then
     if [ "$HOST_ARCH" == "amd64" ]; then RPM_ARCH="x86_64"; fi
     if [ "$HOST_ARCH" == "arm64" ]; then RPM_ARCH="aarch64"; fi
     
-    filename="kula-${VERSION}-${RPM_ARCH}.rpm"
+    filename="kula-${KULA_VERSION}-${RPM_ARCH}.rpm"
     target=$(download_and_verify "$filename")
     echo -e "${BLUE}Installing RPM package...${NC}"
     if command -v dnf >/dev/null; then
@@ -208,7 +208,7 @@ elif [ "$INSTALL_METHOD" == "rpm" ]; then
     echo -e "${GREEN}Installation successful!${NC}"
 
 elif [ "$INSTALL_METHOD" == "aur" ]; then
-    filename="kula-${VERSION}-aur.tar.gz"
+    filename="kula-${KULA_VERSION}-aur.tar.gz"
     # For makepkg, we should NOT be root.
     if [ "$(id -u)" -eq 0 ]; then
         echo -e "${RED}Error: AUR installation should not be run as root.${NC}"
@@ -222,14 +222,14 @@ elif [ "$INSTALL_METHOD" == "aur" ]; then
     mkdir -p "$build_dir"
     tar -xzf "$target" -C "$build_dir"
     
-    cd "$build_dir/kula-$VERSION-aur"
+    cd "$build_dir/kula-${KULA_VERSION}-aur"
     makepkg -si
     cd - >/dev/null
     rm -f "$target"
     echo -e "${GREEN}Installation successful!${NC}"
 
 elif [ "$INSTALL_METHOD" == "tarball_systemd" ]; then
-    filename="kula-${VERSION}-${HOST_ARCH}.tar.gz"
+    filename="kula-${KULA_VERSION}-${HOST_ARCH}.tar.gz"
     target=$(download_and_verify "$filename")
     
     echo -e "${BLUE}Installing from tarball to system directories...${NC}"
@@ -270,7 +270,7 @@ elif [ "$INSTALL_METHOD" == "docker" ]; then
     echo ""
     exit 0
 elif [ "$INSTALL_METHOD" == "tarball_opt" ]; then
-    filename="kula-${VERSION}-${HOST_ARCH}.tar.gz"
+    filename="kula-${KULA_VERSION}-${HOST_ARCH}.tar.gz"
     target=$(download_and_verify "$filename")
     
     echo -e "${BLUE}Installing to /opt/kula...${NC}"
