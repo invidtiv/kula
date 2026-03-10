@@ -29,7 +29,7 @@ stores them in a built-in tiered ring-buffer storage engine, and serves them thr
 
 | Metric | What's Collected |
 |--------|-----------------|
-| **CPU** | Total usage (user, system, iowait, irq, softirq, steal) + core count |
+| **CPU** | Total usage (user, system, iowait, irq, softirq, steal) + core count, temperature |
 | **Load** | 1 / 5 / 15 min averages, running & total tasks |
 | **Memory** | Total, free, available, used, buffers, cached, shmem |
 | **Swap** | Total, free, used |
@@ -98,6 +98,7 @@ it connects via WebSocket for live updates and falls back to history API for lon
 - Focus mode to show only selected graphs
 - Grid / stacked list layout toggle
 - Alert system for clock sync, entropy issues, overload
+- Light and dark themes available
 ---
 
 ## 💾 Installation
@@ -110,12 +111,22 @@ Example installation methods for **amd64 (x86_64)** GNU/Linux.
 
 Check [Releases](https://github.com/c0m4r/kula/releases) for **ARM** and **RISC-V** packages.
 
+### Quick (auto-detect)
+
+```bash
+KULA_INSTALL=$(mktemp)
+curl -o ${KULA_INSTALL} -fsSL https://kula.ovh/install
+echo "411f4ab2f4023b23d31545ef4f647a3720dbd9c7660dd3ab959f93d5414c29ca ${KULA_INSTALL}" | sha256sum -c || rm ${KULA_INSTALL}
+bash ${KULA_INSTALL}
+rm -f ${KULA_INSTALL}
+```
+
 ### Standalone
 
 ```bash
-wget https://github.com/c0m4r/kula/releases/download/0.7.4/kula-0.7.4-amd64.tar.gz
-echo "6e1a6a389b446d599032f1b3e9940e706fdf820efad25fcac0606ba6a581fac2 kula-0.7.4-amd64.tar.gz" | sha256sum -c || rm kula-0.7.4-amd64.tar.gz
-tar -xvf kula-0.7.4-amd64.tar.gz
+wget https://github.com/c0m4r/kula/releases/download/0.7.5/kula-0.7.5-amd64.tar.gz
+echo "d0ed586b243ccd7abd3c4733fe3ad02e55d74139977110227e90ece100d68ec1 kula-0.7.5-amd64.tar.gz" | sha256sum -c || rm kula-0.7.5-amd64.tar.gz
+tar -xvf kula-0.7.5-amd64.tar.gz
 cd kula
 ./kula
 ```
@@ -131,22 +142,33 @@ docker logs -f kula
 docker run --rm -it --name kula --pid host --network host -v /proc:/proc:ro c0m4r/kula:latest
 ```
 
-### Debian / Ubuntu
+### Debian / Ubuntu (.deb)
+
+Also for: Pop_OS!, Zorin OS, Kali and other debian based OS
 
 ```bash
-wget https://github.com/c0m4r/kula/releases/download/0.7.4/kula-0.7.4-amd64.deb
-echo "1444c1ec923c2df04ccc50955401392fc177cff1af57e91982b70d4549b52035 kula-0.7.4-amd64.deb" | sha256sum -c || rm kula-0.7.4-amd64.deb
-sudo dpkg -i kula-0.7.4-amd64.deb
+wget https://github.com/c0m4r/kula/releases/download/0.7.5/kula-0.7.5-amd64.deb
+echo "7c6d9acc77e46d2356280d966006f13aed1cfa6b1072daa6a02ed186852356d1 kula-0.7.5-amd64.deb" | sha256sum -c || rm kula-0.7.5-amd64.deb
+sudo dpkg -i kula-0.7.5-amd64.deb
 systemctl status kula
 ```
 
-### Arch / Manjaro (AUR)
+### RHEL / Fedora / CentOS / Rocky / Alma (.rpm)
 
 ```bash
-wget https://github.com/c0m4r/kula/releases/download/0.7.4/kula-0.7.4-aur.tar.gz
-echo "dffc7bf3adbb2476f690d494c6f086d64088c10ac4705663a6488849e96478c8 kula-0.7.4-aur.tar.gz" | sha256sum -c || rm kula-0.7.4-aur.tar.gz
-tar -xvf kula-0.7.4-aur.tar.gz 
-cd kula-0.7.4-aur
+wget https://github.com/c0m4r/kula/releases/download/0.7.5/kula-0.7.5-x86_64.rpm
+echo "116dec0f4d166a7a759fee150a6ce18d4f57b1aa710f5f953bb7dc726363b5ce kula-0.7.5-x86_64.rpm" | sha256sum -c || rm kula-0.7.5-x86_64.rpm
+sudo rpm -i kula-0.7.5-x86_64.rpm
+systemctl status kula
+```
+
+### Arch Linux / Manjaro (AUR)
+
+```bash
+wget https://github.com/c0m4r/kula/releases/download/0.7.5/kula-0.7.5-aur.tar.gz
+echo "<checksum> kula-0.7.5-aur.tar.gz" | sha256sum -c || rm kula-0.7.5-aur.tar.gz
+tar -xvf kula-0.7.5-aur.tar.gz 
+cd kula-0.7.5-aur
 makepkg -si
 ```
 
@@ -271,7 +293,7 @@ bash addons/build_aur.sh
 cd dist/aur && makepkg -si
 ```
 
-### Red Hat / Fedora / Rocky Linux / AlmaLinux (.rpm)
+### RHEL / Fedora / CentOS / Rocky / Alma (.rpm)
 
 ```bash
 bash addons/build_rpm.sh
