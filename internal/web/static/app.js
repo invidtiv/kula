@@ -58,7 +58,7 @@
         let pref = {};
         try { pref = JSON.parse(localStorage.getItem('kula_graphs_max') || '{}')[id]; } catch (e) { }
         if (!pref && state.configMax) pref = state.configMax[id];
-        if (!pref || pref.mode === 'off') return undefined;
+        if (!pref || !pref.mode || pref.mode === 'off') return undefined;
         if (pref.mode === 'on') return pref.value;
         if (pref.mode === 'auto') {
             if (typeof pref.auto === 'number' && pref.auto > 0) return pref.auto; // TjMax or Link Speed
@@ -2121,9 +2121,9 @@
                     let prefs = {};
                     try { prefs = JSON.parse(localStorage.getItem('kula_graphs_max') || '{}'); } catch (e) { }
                     let cur = prefs[graphId] || (state.configMax && state.configMax[graphId]);
-                    if (!cur) cur = { mode: 'off', value: graphId === 'network' ? 1000 : 100 };
+                    if (!cur || !cur.mode) cur = Object.assign({}, cur, { mode: 'off', value: cur?.value || (graphId === 'network' ? 1000 : 100) });
 
-                    let uiMode = cur.mode === 'auto' ? 'on' : cur.mode;
+                    let uiMode = (cur.mode === 'auto' || cur.mode === 'on') ? 'on' : 'off';
                     let uiVal = cur.value;
                     if (cur.mode === 'auto') {
                         uiVal = (typeof cur.auto === 'number' && cur.auto > 0) ? cur.auto : cur.value;
