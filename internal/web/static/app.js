@@ -292,13 +292,17 @@
             { label: 'Shmem', borderColor: colors.purple, backgroundColor: colors.purpleAlpha, fill: true, data: [] },
             { label: 'Free', borderColor: colors.teal, data: [], fill: false, borderDash: [4, 2] },
             { label: 'Available', borderColor: colors.lime, data: [], fill: false, borderDash: [4, 2] },
-        ], { ticks: { callback: v => formatBytesShort(v) } });
+        ], { ticks: { callback: v => formatBytesShort(v) } }, {
+            tooltip: { callbacks: { label: ctx => ctx.dataset.label + ': ' + formatBytesShort(ctx.parsed.y) } }
+        });
 
         // Swap — with Free dataset, max set dynamically
         state.charts.swap = createTimeSeriesChart('chart-swap', [
             { label: 'Used', borderColor: colors.orange, backgroundColor: colors.orangeAlpha, fill: true, data: [] },
             { label: 'Free', borderColor: colors.teal, data: [], fill: false, borderDash: [4, 2] },
-        ], { min: 0, ticks: { callback: v => formatBytesShort(v) } });
+        ], { min: 0, ticks: { callback: v => formatBytesShort(v) } }, {
+            tooltip: { callbacks: { label: ctx => ctx.dataset.label + ': ' + formatBytesShort(ctx.parsed.y) } }
+        });
 
         let networkYConfig = { ticks: { callback: v => v.toFixed(1) + ' Mbps' } };
         let networkMax = getChartMaxBound('network');
@@ -389,16 +393,23 @@
         // Self monitoring
         state.charts.self = createTimeSeriesChart('chart-self', [
             { label: 'CPU %', borderColor: colors.cyan, data: [], fill: false, yAxisID: 'y' },
-            { label: 'RSS MB', borderColor: colors.purple, data: [], fill: false, yAxisID: 'y1' },
-        ], {});
-
+            { label: 'RSS', borderColor: colors.purple, data: [], fill: false, yAxisID: 'y1' },
+        ], {}, {
+            tooltip: {
+                callbacks: {
+                    label: ctx => ctx.dataset.yAxisID === 'y1'
+                        ? ctx.dataset.label + ': ' + formatBytesShort(ctx.parsed.y)
+                        : ctx.dataset.label + ': ' + ctx.parsed.y.toFixed(1)
+                }
+            }
+        });
         // Reconfigure self chart for dual axes
         if (state.charts.self) {
             state.charts.self.options.scales.y1 = {
                 position: 'right',
                 beginAtZero: true,
                 grid: { display: false },
-                ticks: { callback: v => v.toFixed(0) + ' MB' },
+                ticks: { callback: v => formatBytesShort(v) },
             };
             state.charts.self.update('none');
         }
@@ -614,7 +625,7 @@
         // Self
         if (state.charts.self && s.self) {
             state.charts.self.data.datasets[0].data.push(point(s.self.cpu_pct));
-            state.charts.self.data.datasets[1].data.push(point((s.self.mem_rss || 0) / 1048576));
+            state.charts.self.data.datasets[1].data.push(point(s.self.mem_rss || 0));
         }
     }
 
