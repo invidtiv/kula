@@ -116,7 +116,7 @@ Check [Releases](https://github.com/c0m4r/kula/releases) for **ARM** and **RISC-
 ```bash
 KULA_INSTALL=$(mktemp)
 curl -o ${KULA_INSTALL} -fsSL https://kula.ovh/install
-echo "411f4ab2f4023b23d31545ef4f647a3720dbd9c7660dd3ab959f93d5414c29ca ${KULA_INSTALL}" | sha256sum -c || rm ${KULA_INSTALL}
+echo "411f4ab2f4023b23d31545ef4f647a3720dbd9c7660dd3ab959f93d5414c29ca ${KULA_INSTALL}" | sha256sum -c || rm -f ${KULA_INSTALL}
 bash ${KULA_INSTALL}
 rm -f ${KULA_INSTALL}
 ```
@@ -125,7 +125,7 @@ rm -f ${KULA_INSTALL}
 
 ```bash
 wget https://github.com/c0m4r/kula/releases/download/0.7.5/kula-0.7.5-amd64.tar.gz
-echo "d0ed586b243ccd7abd3c4733fe3ad02e55d74139977110227e90ece100d68ec1 kula-0.7.5-amd64.tar.gz" | sha256sum -c || rm kula-0.7.5-amd64.tar.gz
+echo "d0ed586b243ccd7abd3c4733fe3ad02e55d74139977110227e90ece100d68ec1 kula-0.7.5-amd64.tar.gz" | sha256sum -c || rm -f kula-0.7.5-amd64.tar.gz
 tar -xvf kula-0.7.5-amd64.tar.gz
 cd kula
 ./kula
@@ -148,7 +148,7 @@ Also for: Pop_OS!, Zorin OS, Kali and other debian based OS
 
 ```bash
 wget https://github.com/c0m4r/kula/releases/download/0.7.5/kula-0.7.5-amd64.deb
-echo "7c6d9acc77e46d2356280d966006f13aed1cfa6b1072daa6a02ed186852356d1 kula-0.7.5-amd64.deb" | sha256sum -c || rm kula-0.7.5-amd64.deb
+echo "7c6d9acc77e46d2356280d966006f13aed1cfa6b1072daa6a02ed186852356d1 kula-0.7.5-amd64.deb" | sha256sum -c || rm -f kula-0.7.5-amd64.deb
 sudo dpkg -i kula-0.7.5-amd64.deb
 systemctl status kula
 ```
@@ -157,7 +157,7 @@ systemctl status kula
 
 ```bash
 wget https://github.com/c0m4r/kula/releases/download/0.7.5/kula-0.7.5-x86_64.rpm
-echo "116dec0f4d166a7a759fee150a6ce18d4f57b1aa710f5f953bb7dc726363b5ce kula-0.7.5-x86_64.rpm" | sha256sum -c || rm kula-0.7.5-x86_64.rpm
+echo "116dec0f4d166a7a759fee150a6ce18d4f57b1aa710f5f953bb7dc726363b5ce kula-0.7.5-x86_64.rpm" | sha256sum -c || rm -f kula-0.7.5-x86_64.rpm
 sudo rpm -i kula-0.7.5-x86_64.rpm
 systemctl status kula
 ```
@@ -166,7 +166,7 @@ systemctl status kula
 
 ```bash
 wget https://github.com/c0m4r/kula/releases/download/0.7.5/kula-0.7.5-aur.tar.gz
-echo "<checksum> kula-0.7.5-aur.tar.gz" | sha256sum -c || rm kula-0.7.5-aur.tar.gz
+echo "<checksum> kula-0.7.5-aur.tar.gz" | sha256sum -c || rm -f kula-0.7.5-aur.tar.gz
 tar -xvf kula-0.7.5-aur.tar.gz 
 cd kula-0.7.5-aur
 makepkg -si
