@@ -114,7 +114,7 @@ Example installation methods for **amd64 (x86_64)** GNU/Linux.
 
 Check [Releases](https://github.com/c0m4r/kula/releases) for **ARM** and **RISC-V** packages.
 
-### Quick (auto-detect)
+### Guided installation
 
 ```bash
 KULA_INSTALL=$(mktemp)
@@ -124,7 +124,7 @@ bash ${KULA_INSTALL}
 rm -f ${KULA_INSTALL}
 ```
 
-### Standalone
+### Quick
 
 ```bash
 wget https://github.com/c0m4r/kula/releases/download/0.8.1/kula-0.8.1-amd64.tar.gz
@@ -136,13 +136,17 @@ cd kula
 
 ### Docker
 
+With persistent storage:
+
+Temporary, no persistent storage:
+
 ```bash
-# With persistent storage
+docker run --rm -it --name kula --pid host --network host -v /proc:/proc:ro c0m4r/kula:latest
+```
+
+```bash
 docker run -d --name kula --pid host --network host -v /proc:/proc:ro -v kula_data:/app/data c0m4r/kula:latest
 docker logs -f kula
-
-# Temporary, no persistent storage
-docker run --rm -it --name kula --pid host --network host -v /proc:/proc:ro c0m4r/kula:latest
 ```
 
 ### Debian / Ubuntu (.deb)
