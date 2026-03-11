@@ -36,7 +36,8 @@ func (c *Collector) parseDiskStats() map[string]diskRaw {
 		// dm- (device-mapper/LVM/LUKS), md (software RAID), loop, sr (optical), ram, zram
 		if strings.HasPrefix(name, "dm-") || strings.HasPrefix(name, "md") ||
 			strings.HasPrefix(name, "loop") || strings.HasPrefix(name, "sr") ||
-			strings.HasPrefix(name, "ram") || strings.HasPrefix(name, "zram") {
+			strings.HasPrefix(name, "ram") || strings.HasPrefix(name, "zram") ||
+			strings.HasPrefix(name, "fd") {
 			continue
 		}
 
@@ -154,6 +155,11 @@ func (c *Collector) collectFileSystems() []FileSystemInfo {
 		device := fields[0]
 		mount := fields[1]
 		fstype := fields[2]
+
+		// Skip floppy disks
+		if strings.HasPrefix(device, "/dev/fd") {
+			continue
+		}
 
 		// Only real filesystems
 		switch fstype {
@@ -310,6 +316,10 @@ func DetectDiskTjMax() float64 {
 	}
 
 	for _, match := range matches {
+		name := filepath.Base(match)
+		if strings.HasPrefix(name, "fd") {
+			continue
+		}
 		pathsToCheck := []string{
 			filepath.Join(match, "device", "hwmon"),
 			filepath.Join(match, "device", "device", "hwmon"),
