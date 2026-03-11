@@ -213,6 +213,8 @@
             options: {
                 responsive: true,
                 maintainAspectRatio: false,
+                normalized: true,
+                animation: false,
                 interaction: { mode: 'index', intersect: false },
                 spanGaps: state.joinMetrics,
                 plugins: {
@@ -987,7 +989,8 @@
 
         const from = fromDate.toISOString();
         const to = toDate.toISOString();
-        fetch(`/api/history?from=${from}&to=${to}`)
+        const points = Math.max(600, window.innerWidth || 1000);
+        fetch(`/api/history?from=${from}&to=${to}&points=${points}`)
             .then(r => r.json())
             .then(response => {
                 const data = response.samples || response;
@@ -1506,7 +1509,8 @@
 
         const to = new Date().toISOString();
         const from = new Date(Date.now() - rangeSeconds * 1000).toISOString();
-        fetch(`/api/history?from=${from}&to=${to}`)
+        const points = Math.max(600, window.innerWidth || 1000);
+        fetch(`/api/history?from=${from}&to=${to}&points=${points}`)
             .then(r => r.json())
             .then(response => {
                 const data = response.samples || response;
@@ -1585,7 +1589,8 @@
 
         const from = fromDate.toISOString();
         const to = toDate.toISOString();
-        fetch(`/api/history?from=${from}&to=${to}`)
+        const points = Math.max(600, window.innerWidth || 1000);
+        fetch(`/api/history?from=${from}&to=${to}&points=${points}`)
             .then(r => r.json())
             .then(response => {
                 const data = response.samples || response;

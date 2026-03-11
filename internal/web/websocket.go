@@ -48,7 +48,10 @@ var upgrader = websocket.Upgrader{
 }
 
 func (s *Server) handleWebSocket(w http.ResponseWriter, r *http.Request) {
-	conn, err := upgrader.Upgrade(w, r, nil)
+	upg := upgrader
+	upg.EnableCompression = s.cfg.EnableCompression
+
+	conn, err := upg.Upgrade(w, r, nil)
 	if err != nil {
 		log.Printf("WebSocket upgrade error: %v", err)
 		return

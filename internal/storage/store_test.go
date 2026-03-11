@@ -462,7 +462,7 @@ func TestQueryRangeWithMetaReturnsTierInfo(t *testing.T) {
 		t.Fatalf("WriteSample: %v", err)
 	}
 
-	result, err := store.QueryRangeWithMeta(now.Add(-time.Minute), now.Add(time.Minute))
+	result, err := store.QueryRangeWithMeta(now.Add(-time.Minute), now.Add(time.Minute), 450)
 	if err != nil {
 		t.Fatalf("QueryRangeWithMeta: %v", err)
 	}
@@ -484,6 +484,7 @@ func TestQueryRangeWithMetaEmptyStore(t *testing.T) {
 	result, err := store.QueryRangeWithMeta(
 		time.Now().Add(-time.Minute),
 		time.Now(),
+		450,
 	)
 	if err != nil {
 		t.Fatalf("QueryRangeWithMeta on empty store: %v", err)
@@ -871,7 +872,7 @@ func BenchmarkDownsampling(b *testing.B) {
 	b.ReportAllocs()
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
-		result, err := store.QueryRangeWithMeta(from, to)
+		result, err := store.QueryRangeWithMeta(from, to, 450)
 		if err != nil {
 			b.Fatalf("QueryRangeWithMeta: %v", err)
 		}

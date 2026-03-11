@@ -235,7 +235,7 @@ type HistoryResult struct {
 
 // QueryRange returns samples for a time range, choosing the best tier.
 func (s *Store) QueryRange(from, to time.Time) ([]*AggregatedSample, error) {
-	result, err := s.QueryRangeWithMeta(from, to)
+	result, err := s.QueryRangeWithMeta(from, to, 450)
 	if err != nil {
 		return nil, err
 	}
@@ -246,7 +246,7 @@ func (s *Store) QueryRange(from, to time.Time) ([]*AggregatedSample, error) {
 // It tries the highest-resolution tier first and falls back to lower tiers
 // when the estimated sample count would exceed maxSamples, or when the tier
 // doesn't have data covering the requested range.
-func (s *Store) QueryRangeWithMeta(from, to time.Time) (*HistoryResult, error) {
+func (s *Store) QueryRangeWithMeta(from, to time.Time, targetPoints int) (*HistoryResult, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
@@ -255,6 +255,12 @@ func (s *Store) QueryRangeWithMeta(from, to time.Time) (*HistoryResult, error) {
 	}
 
 	const maxSamples = 3600
+	const maxScreenPoints = 7200
+	if targetPoints <= 0 {
+		targetPoints = 450
+	} else if targetPoints > maxScreenPoints {
+		targetPoints = maxScreenPoints
+	}
 
 	var resolutions []string
 	var resDurations []time.Duration
@@ -276,7 +282,11 @@ func (s *Store) QueryRangeWithMeta(from, to time.Time) (*HistoryResult, error) {
 
 		// Skip this tier if it would produce too many samples
 		// (unless it's the last tier — always use it as fallback)
-		if estimatedSamples > maxSamples && tierIdx < len(s.tiers)-1 {
+		maxAllowed := maxSamples
+		if targetPoints > maxAllowed {
+			maxAllowed = targetPoints
+		}
+		if estimatedSamples > maxAllowed && tierIdx < len(s.tiers)-1 {
 			continue
 		}
 
@@ -295,9 +305,8 @@ func (s *Store) QueryRangeWithMeta(from, to time.Time) (*HistoryResult, error) {
 					res = resolutions[tierIdx]
 				}
 
-				if len(samples) > 800 {
-					targetSamples := 450
-					groupSize := len(samples) / targetSamples
+				if len(samples) > int(float64(targetPoints)*1.5) {
+					groupSize := len(samples) / targetPoints
 					if groupSize > 1 {
 						downsampled := make([]*AggregatedSample, 0, (len(samples)/groupSize)+1)
 						for i := 0; i < len(samples); i += groupSize {

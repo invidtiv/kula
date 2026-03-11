@@ -2,12 +2,14 @@ package web
 
 import (
 	"bufio"
+	"compress/gzip"
 	"context"
 	"crypto/rand"
 	"embed"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"io"
 	"io/fs"
 	"log"
 	"net"
@@ -95,6 +97,44 @@ func loggingMiddleware(cfg config.WebConfig, next http.Handler) http.Handler {
 	})
 }
 
+type gzipResponseWriter struct {
+	io.Writer
+	http.ResponseWriter
+	wroteHeader bool
+}
+
+func (w *gzipResponseWriter) WriteHeader(status int) {
+	if !w.wroteHeader {
+		w.wroteHeader = true
+		w.ResponseWriter.Header().Del("Content-Length")
+		w.ResponseWriter.WriteHeader(status)
+	}
+}
+
+func (w *gzipResponseWriter) Write(b []byte) (int, error) {
+	if !w.wroteHeader {
+		w.WriteHeader(http.StatusOK)
+	}
+	return w.Writer.Write(b)
+}
+
+func gzipMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if strings.Contains(strings.ToLower(r.Header.Get("Connection")), "upgrade") ||
+			!strings.Contains(r.Header.Get("Accept-Encoding"), "gzip") {
+			next.ServeHTTP(w, r)
+			return
+		}
+
+		w.Header().Set("Content-Encoding", "gzip")
+		gz := gzip.NewWriter(w)
+		defer func() { _ = gz.Close() }()
+
+		gzw := &gzipResponseWriter{Writer: gz, ResponseWriter: w}
+		next.ServeHTTP(gzw, r)
+	})
+}
+
 func securityMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		b := make([]byte, 16)
@@ -156,7 +196,12 @@ func (s *Server) Start() error {
 		}
 	}()
 
-	s.httpSrv = &http.Server{Handler: securityMiddleware(mux)}
+	var handler = securityMiddleware(mux)
+	if s.cfg.EnableCompression {
+		handler = gzipMiddleware(handler)
+	}
+
+	s.httpSrv = &http.Server{Handler: handler}
 
 	listeners, err := s.createListeners()
 	if err != nil {
@@ -289,8 +334,14 @@ func (s *Server) handleHistory(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	pointsStr := r.URL.Query().Get("points")
+	points := 450
+	if pointsStr != "" {
+		_, _ = fmt.Sscanf(pointsStr, "%d", &points)
+	}
+
 	startLoad := time.Now()
-	result, err := s.store.QueryRangeWithMeta(from, to)
+	result, err := s.store.QueryRangeWithMeta(from, to, points)
 	if err != nil {
 		http.Error(w, fmt.Sprintf(`{"error":"%s"}`, err), http.StatusInternalServerError)
 		return

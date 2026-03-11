@@ -51,6 +51,7 @@ type WebConfig struct {
 	DefaultAggregation string      `yaml:"default_aggregation"`
 	Logging            LogConfig   `yaml:"logging"`
 	TrustProxy         bool        `yaml:"trust_proxy"`
+	EnableCompression  bool        `yaml:"enable_compression"`
 	Graphs             GraphConfig `yaml:"graphs"`
 	Version            string      `yaml:"-"` // injected at runtime, not from config file
 	OS                 string      `yaml:"-"`
@@ -138,6 +139,7 @@ func DefaultConfig() *Config {
 				Enabled: true,
 				Level:   "perf",
 			},
+			EnableCompression: true,
 			Graphs: GraphConfig{
 				CPUTemp: GraphMaxConfig{MaxMode: "off", MaxValue: 100},  // 100 Celsius
 				Network: GraphMaxConfig{MaxMode: "off", MaxValue: 1000}, // 1000 Mbps

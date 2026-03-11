@@ -38,6 +38,9 @@ web:
   listen: "127.0.0.1" # use [] brackets for IPv6 addresses, e.g. "[::1]"
   port: 8080
 
+  # Compress HTTP responses and WebSockets (default: true)
+  enable_compression: true
+
   # Trust X-Forwarded-Proto headers from reverse proxies for the Secure cookie flag
   trust_proxy: false
 
