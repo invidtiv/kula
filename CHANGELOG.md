@@ -15,6 +15,7 @@ Types of changes: Added, Changed, Deprecated, Removed, Fixed, Security
 
 ### Changed
 
+- Substantial TUI rework
 - New default port: 27960
 - New default listen value: "" - listen on all v4/v6 addresses
 - Make the program naming consistent
