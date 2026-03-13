@@ -1,5 +1,5 @@
 [Unit]
-Description=Kula-Szpiegula — Lightweight Linux Server Monitor
+Description=Kula - Lightweight Linux Server Monitor
 Documentation=https://github.com/c0m4r/kula
 After=network.target
 

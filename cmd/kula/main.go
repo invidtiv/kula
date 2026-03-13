@@ -28,7 +28,7 @@ import (
 var version = kula.Version
 
 func printUsage() {
-	fmt.Fprintf(os.Stderr, `Kula-Szpiegula v%s — Lightweight Linux Server Monitor
+	fmt.Fprintf(os.Stderr, `Kula v%s — Lightweight Linux Server Monitor
 
 Usage:
   kula [flags] [command]
@@ -57,7 +57,7 @@ func main() {
 	flag.Parse()
 
 	if showVersion || showVersionShort {
-		fmt.Printf("Kula-Szpiegula v%s — Lightweight Linux Server Monitor\n", version)
+		fmt.Printf("Kula v%s — Lightweight Linux Server Monitor\n", version)
 		os.Exit(0)
 	}
 
@@ -168,7 +168,7 @@ func runServe(cfg *config.Config, configPath string, osName, kernelVersion, cpuA
 		}
 	}()
 
-	log.Printf("Kula-Szpiegula v%s started (collecting every %s)", version, cfg.Collection.Interval)
+	log.Printf("Kula v%s started (collecting every %s)", version, cfg.Collection.Interval)
 	log.Printf("OS: %s, Kernel: %s, Arch: %s", osName, kernelVersion, cpuArch)
 	<-ctx.Done()
 

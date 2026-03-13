@@ -1,8 +1,8 @@
 #!/sbin/openrc-run
-# Kula-Szpiegula — Lightweight Linux Server Monitor
+# Kula - Lightweight Linux Server Monitor
 
 name="kula"
-description="Kula-Szpiegula server monitoring daemon"
+description="Kula server monitoring daemon"
 
 command="/usr/bin/kula"
 command_args="--config /etc/kula/config.yaml serve"

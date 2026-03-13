@@ -1,5 +1,5 @@
 /* ============================================================
-   Kula-Szpiegula Dashboard Application
+   Kula Dashboard Application
    WebSocket-driven live monitoring with Chart.js
    ============================================================ */
 
@@ -1775,7 +1775,7 @@
                 }
 
                 console.log(
-                    '%c KULA-SZPIEGULA %c v' + (cfg.version || '0.0.0') + ' %c Welcome to your monitoring dashboard! ',
+                    '%c K U L A %c v' + (cfg.version || '0.0.0') + ' %c Welcome to your monitoring dashboard! ',
                     'background: #0e1f2fff; color: #fff; border-radius: 3px 0 0 3px; padding: 3px 6px; font-weight: bold; font-family: sans-serif;',
                     'background: #0b406eff; color: #fff; border-radius: 0 3px 3px 0; padding: 3px 6px; font-weight: bold; font-family: sans-serif;',
                     'color: #000000ff; font-weight: 500; font-family: sans-serif; margin-left: 10px;'

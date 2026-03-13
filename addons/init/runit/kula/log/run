@@ -1,4 +1,4 @@
 #!/bin/sh
-# Kula-Szpiegula — runit log service
+# Kula - runit log service
 
 exec svlogd -tt /var/log/kula
