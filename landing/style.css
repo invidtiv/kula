@@ -140,6 +140,16 @@ body {
     backdrop-filter: blur(14px);
     border-bottom: 1px solid var(--border-color);
     transition: background 0.3s, border-color 0.3s;
+    flex-wrap: nowrap;
+}
+
+@media (max-width: 480px) {
+    .nav {
+        flex-wrap: wrap;
+        justify-content: center;
+        gap: 0.5rem;
+        padding: 0.6rem 0.5rem;
+    }
 }
 
 body.light-mode .nav {
@@ -170,6 +180,12 @@ body.light-mode .nav {
     display: flex;
     align-items: center;
     gap: 0.4rem;
+}
+
+@media (max-width: 480px) {
+    .nav-links {
+        gap: 0.25rem;
+    }
 }
 
 .nav-links a:not(.btn-primary):not(.github-link) {
@@ -266,6 +282,15 @@ body.light-mode .btn-outline .stars-badge {
     display: flex;
     align-items: center;
     justify-content: center;
+    flex-shrink: 0;
+}
+
+@media (max-width: 480px) {
+    .btn-theme-toggle {
+        padding: 0.45rem 0.5rem;
+        margin: 0 0.2rem;
+        font-size: 1rem;
+    }
 }
 
 .btn-theme-toggle:hover {
@@ -806,13 +831,41 @@ pre code {
         font-size: 0.95rem;
     }
 
+    @media (max-width: 480px) {
+
+        .nav-brand,
+        .github-link {
+            display: none;
+        }
+
+        .nav-links {
+            width: 100%;
+            justify-content: center;
+            gap: 0.25rem;
+        }
+    }
+
+    @media (max-width: 380px) {
+        .nav-links {
+            width: auto;
+        }
+    }
+
     .install-tab {
         padding: 0.5rem 1rem;
         font-size: 0.75rem;
     }
 
+    .github-link {
+        padding: 0.45rem 0.6rem;
+    }
+
     .github-link span:not(.stars-badge) {
         display: none;
+    }
+
+    .stars-badge {
+        margin-left: 0;
     }
 
     .metrics-table td:first-child {

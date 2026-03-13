@@ -11,6 +11,109 @@
     <link rel="manifest" href="manifest.json">
     <meta name="theme-color" content="#0a0a0a">
     <link rel="stylesheet" href="style.css">
+    <!-- SEO: Multi-language support -->
+    <link rel="alternate" hreflang="x-default" href="https://kula.ovh/" />
+    <link rel="alternate" hreflang="ar" href="https://kula.ovh/?lang=ar" />
+    <link rel="alternate" hreflang="bn" href="https://kula.ovh/?lang=bn" />
+    <link rel="alternate" hreflang="cs" href="https://kula.ovh/?lang=cs" />
+    <link rel="alternate" hreflang="de" href="https://kula.ovh/?lang=de" />
+    <link rel="alternate" hreflang="en" href="https://kula.ovh/?lang=en" />
+    <link rel="alternate" hreflang="es" href="https://kula.ovh/?lang=es" />
+    <link rel="alternate" hreflang="fr" href="https://kula.ovh/?lang=fr" />
+    <link rel="alternate" hreflang="he" href="https://kula.ovh/?lang=he" />
+    <link rel="alternate" hreflang="hi" href="https://kula.ovh/?lang=hi" />
+    <link rel="alternate" hreflang="id" href="https://kula.ovh/?lang=id" />
+    <link rel="alternate" hreflang="it" href="https://kula.ovh/?lang=it" />
+    <link rel="alternate" hreflang="ja" href="https://kula.ovh/?lang=ja" />
+    <link rel="alternate" hreflang="ko" href="https://kula.ovh/?lang=ko" />
+    <link rel="alternate" hreflang="ms" href="https://kula.ovh/?lang=ms" />
+    <link rel="alternate" hreflang="nl" href="https://kula.ovh/?lang=nl" />
+    <link rel="alternate" hreflang="pl" href="https://kula.ovh/?lang=pl" />
+    <link rel="alternate" hreflang="pt" href="https://kula.ovh/?lang=pt" />
+    <link rel="alternate" hreflang="ro" href="https://kula.ovh/?lang=ro" />
+    <link rel="alternate" hreflang="ru" href="https://kula.ovh/?lang=ru" />
+    <link rel="alternate" hreflang="sv" href="https://kula.ovh/?lang=sv" />
+    <link rel="alternate" hreflang="th" href="https://kula.ovh/?lang=th" />
+    <link rel="alternate" hreflang="tr" href="https://kula.ovh/?lang=tr" />
+    <link rel="alternate" hreflang="uk" href="https://kula.ovh/?lang=uk" />
+    <link rel="alternate" hreflang="ur" href="https://kula.ovh/?lang=ur" />
+    <link rel="alternate" hreflang="vi" href="https://kula.ovh/?lang=vi" />
+    <link rel="alternate" hreflang="zh" href="https://kula.ovh/?lang=zh" />
+    <style>
+        /* Language Switcher Styles */
+        .language-switcher {
+            position: relative;
+            display: inline-flex;
+            align-items: center;
+            margin-right: 12px;
+        }
+
+        .lang-select {
+            background-color: rgba(255, 255, 255, 0.08);
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            color: #fff;
+            padding: 6px 12px;
+            padding-right: 32px;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 0.85rem;
+            font-weight: 500;
+            outline: none;
+            transition: all 0.2s ease;
+            appearance: none;
+            -webkit-appearance: none;
+            -moz-appearance: none;
+            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='10' fill='white' viewBox='0 0 16 16'%3E%3Cpath d='M7.247 11.14 2.451 5.658C1.885 5.013 2.345 4 3.204 4h9.592a1 1 0 0 1 .753 1.659l-4.796 5.48a1 1 0 0 1-1.506 0z'/%3E%3C/svg%3E");
+            background-repeat: no-repeat !important;
+            background-position: right 12px center !important;
+            background-size: 10px 10px !important;
+            min-width: 140px;
+        }
+
+        @media (max-width: 480px) {
+            .lang-select {
+                min-width: 90px;
+                padding-left: 6px;
+                padding-right: 24px;
+                background-position: right 6px center !important;
+                font-size: 0.8rem;
+            }
+        }
+
+        .lang-select:hover {
+            background-color: rgba(255, 255, 255, 0.12);
+            border-color: var(--accent-color);
+            box-shadow: 0 0 15px rgba(0, 123, 255, 0.1);
+        }
+
+        /* Style options for some browsers */
+        .lang-select option {
+            background-color: #121212;
+            color: #fff;
+            padding: 10px;
+        }
+
+        .light-mode .lang-select {
+            background-color: rgba(0, 0, 0, 0.05);
+            border: 1px solid rgba(0, 0, 0, 0.1);
+            color: #1a1a1a;
+            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='10' fill='black' viewBox='0 0 16 16'%3E%3Cpath d='M7.247 11.14 2.451 5.658C1.885 5.013 2.345 4 3.204 4h9.592a1 1 0 0 1 .753 1.659l-4.796 5.48a1 1 0 0 1-1.506 0z'/%3E%3C/svg%3E");
+        }
+
+        .light-mode .lang-select:hover {
+            background-color: rgba(0, 0, 0, 0.08);
+        }
+
+        .light-mode .lang-select option {
+            background-color: #fff;
+            color: #1a1a1a;
+        }
+
+        [data-i18n-html] {
+            display: inline-block;
+            width: 100%;
+        }
+    </style>
 </head>
 
 <body>
@@ -22,15 +125,45 @@
             <span>KULA</span>
         </a>
         <div class="nav-links">
-            <a href="#features">Features</a>
-            <a href="#preview">Preview</a>
-            <a href="#metrics">Metrics</a>
-            <a href="https://github.com/c0m4r/kula?tab=readme-ov-file#-installation">Install</a>
+            <a href="#features" data-i18n="nav_features">Features</a>
+            <a href="#preview" data-i18n="nav_preview">Preview</a>
+            <a href="#metrics" data-i18n="nav_metrics">Metrics</a>
+            <a href="https://github.com/c0m4r/kula?tab=readme-ov-file#-installation" data-i18n="nav_install">Install</a>
             <a href="https://github.com/c0m4r/kula" class="github-link" id="github-link">
                 <img src="github.svg" alt="" class="github-icon">
-                <span>GitHub</span>
+                <span data-i18n="nav_github">GitHub</span>
                 <span class="stars-badge github-stars-count"></span>
             </a>
+            <div class="language-switcher">
+                <select id="lang-select" class="lang-select" aria-label="Select Language">
+                    <option value="en">🇺🇸 English</option>
+                    <option value="ar">🇸🇦 العربية</option>
+                    <option value="ms">🇲🇾 Bahasa Melayu</option>
+                    <option value="bn">🇧🇩 বাংলা</option>
+                    <option value="cs">🇨🇿 Čeština</option>
+                    <option value="de">🇩🇪 Deutsch</option>
+                    <option value="es">🇪🇸 Español</option>
+                    <option value="fr">🇫🇷 Français</option>
+                    <option value="he">🇮🇱 עברית</option>
+                    <option value="hi">🇮🇳 हिन्दी</option>
+                    <option value="id">🇮🇩 Indonesia</option>
+                    <option value="it">🇮🇹 Italiano</option>
+                    <option value="ja">🇯🇵 日本語</option>
+                    <option value="ko">🇰🇷 한국어</option>
+                    <option value="nl">🇳🇱 Nederlands</option>
+                    <option value="pl">🇵🇱 Polski</option>
+                    <option value="pt">🇵🇹 Português</option>
+                    <option value="ro">🇷🇴 Română</option>
+                    <option value="ru">🇷🇺 Русский</option>
+                    <option value="sv">🇸🇪 Svenska</option>
+                    <option value="th">🇹🇭 ไทย</option>
+                    <option value="tr">🇹🇷 Türkçe</option>
+                    <option value="uk">🇺🇦 Українська</option>
+                    <option value="ur">🇵🇰 اردو</option>
+                    <option value="vi">🇻🇳 Tiếng Việt</option>
+                    <option value="zh">🇨🇳 中文</option>
+                </select>
+            </div>
             <button class="btn-theme-toggle" id="btn-theme" title="Toggle light/dark mode"
                 aria-label="Toggle theme">🌓</button>
         </div>
@@ -43,62 +176,71 @@
             <img src="https://raw.githubusercontent.com/c0m4r/kula/main/internal/web/static/kula.svg" alt="Kula"
                 class="hero-logo">
             <h1>K U L A</h1>
-            <p class="hero-tagline">Lightweight, self-contained Linux® server monitoring.<br>Real-time dashboard with
+            <p class="hero-tagline" data-i18n-html="hero_tagline">Lightweight, self-contained Linux® server
+                monitoring.<br>Real-time dashboard with
                 built-in storage engine.</p>
-            <p class="hero-sub">Zero dependencies. No external databases. Single binary. Just deploy and go.</p>
+            <p class="hero-sub" data-i18n="hero_sub">Zero dependencies. No external databases. Single binary. Just
+                deploy and go.</p>
             <div class="hero-buttons">
-                <a href="https://demo.kula.ovh/" class="btn btn-hero"><span role="img" aria-label="eye">👀</span> Live
-                    Demo</a>
+                <a href="https://demo.kula.ovh/" class="btn btn-hero"><span role="img" aria-label="eye">👀</span> <span
+                        data-i18n="btn_demo">Live
+                        Demo</span></a>
                 <a href="https://github.com/c0m4r/kula" class="btn btn-outline">
-                    <img src="github.svg" alt="" class="github-icon"> GitHub
+                    <img src="github.svg" alt="" class="github-icon"> <span data-i18n="btn_github">GitHub</span>
                     <span class="stars-badge github-stars-count"></span>
                 </a>
                 <a href="https://hub.docker.com/r/c0m4r/kula" class="btn btn-docker"><span role="img"
-                        aria-label="whale">🐋</span> Docker Hub</a>
+                        aria-label="whale">🐋</span> <span data-i18n="btn_docker">Docker Hub</span></a>
             </div>
         </section>
 
         <!-- Features -->
         <section class="features fade-up" id="features">
-            <div class="section-label">Why Kula</div>
-            <h2 class="section-heading">Everything in One Binary</h2>
+            <div class="section-label" data-i18n="label_why">Why Kula</div>
+            <h2 class="section-heading" data-i18n="heading_foundation">Everything in One Binary</h2>
             <div class="features-grid">
                 <div class="feature-card">
                     <div class="feature-icon"><span role="img" aria-label="lightning">⚡</span></div>
-                    <h3>Zero Dependencies</h3>
-                    <p>No databases, no agents, no runtime. Upload one binary to your server and start monitoring in
+                    <h3 data-i18n="feature_zero_title">Zero Dependencies</h3>
+                    <p data-i18n="feature_zero_desc">No databases, no agents, no runtime. Upload one binary to your
+                        server and start monitoring in
                         seconds.</p>
                 </div>
                 <div class="feature-card">
                     <div class="feature-icon"><span role="img" aria-label="chart">📊</span></div>
-                    <h3>Real-Time Dashboard</h3>
-                    <p>WebSocket-powered live charts with Chart.js, SVG gauges, interactive zoom, focus mode, and
+                    <h3 data-i18n="feature_dash_title">Real-Time Dashboard</h3>
+                    <p data-i18n="feature_dash_desc">WebSocket-powered live charts with Chart.js, SVG gauges,
+                        interactive zoom, focus mode, and
                         light/dark
                         themes.</p>
                 </div>
                 <div class="feature-card">
                     <div class="feature-icon"><span role="img" aria-label="disk">💾</span></div>
-                    <h3>Built-In Storage</h3>
-                    <p>Tiered ring-buffer engine with predictable disk usage. 1s, 1m, and 5m resolution tiers — no
+                    <h3 data-i18n="feature_storage_title">Built-In Storage</h3>
+                    <p data-i18n="feature_storage_desc">Tiered ring-buffer engine with predictable disk usage. 1s, 1m,
+                        and 5m resolution tiers — no
                         cleanup
                         needed.</p>
                 </div>
                 <div class="feature-card">
                     <div class="feature-icon"><span role="img" aria-label="lock">🔒</span></div>
-                    <h3>Privacy First</h3>
-                    <p>Works on closed networks. No calls to external services. No cloud APIs. No tracking.</p>
+                    <h3 data-i18n="feature_privacy_title">Privacy First</h3>
+                    <p data-i18n="feature_privacy_desc">Works on closed networks. No calls to external services. No
+                        cloud APIs. No tracking.</p>
                 </div>
                 <div class="feature-card">
                     <div class="feature-icon"><span role="img" aria-label="gift">🎁</span></div>
-                    <h3>Open Source</h3>
-                    <p>Kula is free to use and open source. Licensed under AGPLv3. Check the code and contribute on
+                    <h3 data-i18n="feature_open_title">Open Source</h3>
+                    <p data-i18n="feature_open_desc">Kula is free to use and open source. Licensed under AGPLv3. Check
+                        the code and contribute on
                         GitHub.
                     </p>
                 </div>
                 <div class="feature-card">
                     <div class="feature-icon"><span role="img" aria-label="penguin">🐧</span></div>
-                    <h3>Pure Linux</h3>
-                    <p>Reads directly from /proc and /sys every second. Supports amd64, arm64, and riscv64
+                    <h3 data-i18n="feature_linux_title">Pure Linux</h3>
+                    <p data-i18n="feature_linux_desc">Reads directly from /proc and /sys every second. Supports amd64,
+                        arm64, and riscv64
                         architectures.
                     </p>
                 </div>
@@ -107,8 +249,8 @@
 
         <!-- Dashboard Preview -->
         <section class="preview fade-up" id="preview">
-            <div class="section-label">Dashboard</div>
-            <h2 class="section-heading">Real-Time Monitoring at a Glance</h2>
+            <div class="section-label" data-i18n="label_dashboard">Dashboard</div>
+            <h2 class="section-heading" data-i18n="heading_preview">Real-Time Monitoring at a Glance</h2>
             <div class="preview-frame">
                 <img src="https://github.com/user-attachments/assets/d50e5653-0e84-4374-9ded-4d8e9f8eedd2"
                     alt="Kula Dashboard — Dark Mode" loading="lazy" class="preview-dark" id="preview-dark">
@@ -119,55 +261,59 @@
 
         <!-- Metrics -->
         <section class="metrics fade-up" id="metrics">
-            <div class="section-label">What's Collected</div>
-            <h2 class="section-heading">Comprehensive System Metrics</h2>
+            <div class="section-label" data-i18n="label_collected">What's Collected</div>
+            <h2 class="section-heading" data-i18n="heading_metrics">Comprehensive System Metrics</h2>
             <table class="metrics-table">
                 <thead>
                     <tr>
-                        <th>Metric</th>
-                        <th>Details</th>
+                        <th data-i18n="table_metric">Metric</th>
+                        <th data-i18n="table_details">Details</th>
                     </tr>
                 </thead>
                 <tbody>
                     <tr>
-                        <td>CPU</td>
-                        <td>Total usage (user, system, iowait, irq, softirq, steal) + core count</td>
+                        <td data-i18n="metric_cpu">CPU</td>
+                        <td data-i18n="metric_cpu_details">Total usage (user, system, iowait, irq, softirq, steal) +
+                            core count</td>
                     </tr>
                     <tr>
-                        <td>Load</td>
-                        <td>1 / 5 / 15 min averages, running & total tasks</td>
+                        <td data-i18n="metric_load">Load</td>
+                        <td data-i18n="metric_load_details">1 / 5 / 15 min averages, running & total tasks</td>
                     </tr>
                     <tr>
-                        <td>Memory</td>
-                        <td>Total, free, available, used, buffers, cached, shmem</td>
+                        <td data-i18n="metric_memory">Memory</td>
+                        <td data-i18n="metric_memory_details">Total, free, available, used, buffers, cached, shmem</td>
                     </tr>
                     <tr>
-                        <td>Swap</td>
-                        <td>Total, free, used</td>
+                        <td data-i18n="metric_swap">Swap</td>
+                        <td data-i18n="metric_swap_details">Total, free, used</td>
                     </tr>
                     <tr>
-                        <td>Network</td>
-                        <td>Per-interface throughput (Mbps), packets/s, errors, drops; TCP stats; socket counts</td>
+                        <td data-i18n="metric_network">Network</td>
+                        <td data-i18n="metric_network_details">Per-interface throughput (Mbps), packets/s, errors,
+                            drops; TCP stats; socket counts</td>
                     </tr>
                     <tr>
-                        <td>Disks</td>
-                        <td>Per-device I/O (read/write bytes/s, IOPS); filesystem usage</td>
+                        <td data-i18n="metric_disks">Disks</td>
+                        <td data-i18n="metric_disks_details">Per-device I/O (read/write bytes/s, IOPS); filesystem usage
+                        </td>
                     </tr>
                     <tr>
-                        <td>System</td>
-                        <td>Uptime, entropy, clock sync, hostname, logged-in user count</td>
+                        <td data-i18n="metric_system">System</td>
+                        <td data-i18n="metric_system_details">Uptime, entropy, clock sync, hostname, logged-in user
+                            count</td>
                     </tr>
                     <tr>
-                        <td>Processes</td>
-                        <td>Running, sleeping, blocked, zombie counts</td>
+                        <td data-i18n="metric_processes">Processes</td>
+                        <td data-i18n="metric_processes_details">Running, sleeping, blocked, zombie counts</td>
                     </tr>
                     <tr>
-                        <td>Self</td>
-                        <td>Kula's own CPU%, RSS memory, open file descriptors</td>
+                        <td data-i18n="metric_self">Self</td>
+                        <td data-i18n="metric_self_details">Kula's own CPU%, RSS memory, open file descriptors</td>
                     </tr>
                     <tr>
-                        <td>Thermal</td>
-                        <td>CPU and Disk temperatures</td>
+                        <td data-i18n="metric_thermal">Thermal</td>
+                        <td data-i18n="metric_thermal_details">CPU and Disk temperatures</td>
                     </tr>
                 </tbody>
             </table>
@@ -177,13 +323,13 @@
     <!-- Footer -->
     <footer class="footer">
         <div class="footer-links">
-            <a href="https://github.com/c0m4r/kula">GitHub</a>
-            <a href="https://hub.docker.com/r/c0m4r/kula">Docker Hub</a>
-            <a href="https://demo.kula.ovh/">Live Demo</a>
-            <a href="https://github.com/c0m4r/kula?tab=readme-ov-file#-installation">Install</a>
-            <a href="https://github.com/c0m4r/kula/releases">Releases</a>
+            <a href="https://github.com/c0m4r/kula" data-i18n="nav_github">GitHub</a>
+            <a href="https://hub.docker.com/r/c0m4r/kula" data-i18n="btn_docker">Docker Hub</a>
+            <a href="https://demo.kula.ovh/" data-i18n="btn_demo">Live Demo</a>
+            <a href="https://github.com/c0m4r/kula?tab=readme-ov-file#-installation" data-i18n="nav_install">Install</a>
+            <a href="https://github.com/c0m4r/kula/releases" data-i18n="footer_releases">Releases</a>
         </div>
-        <div class="footer-copy">
+        <div class="footer-copy" data-i18n-html="footer_copy">
             Licensed under <a href="https://www.gnu.org/licenses/agpl-3.0">AGPLv3</a> ·
             Linux® is the registered trademark of Linus Torvalds
         </div>
