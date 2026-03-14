@@ -16,6 +16,7 @@ Types of changes: Added, Changed, Deprecated, Removed, Fixed, Security
 - Security headers hardening
 - WebSocket message size guard in the frontend
 - Fix WebSocket double-unregistration bug using sync.Once
+- Implement WebSocket connection limits (global and per-IP) to prevent resource exhaustion
 
 ## [0.9.0] - 2026-03-14
 

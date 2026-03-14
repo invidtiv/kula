@@ -60,7 +60,9 @@ type WebConfig struct {
 	Version            string      `yaml:"-"` // injected at runtime, not from config file
 	OS                 string      `yaml:"-"`
 	Kernel             string      `yaml:"-"`
-	Arch               string      `yaml:"-"`
+	Arch                  string      `yaml:"-"`
+	MaxWebsocketConns     int         `yaml:"max_websocket_conns"`
+	MaxWebsocketConnsPerIP int         `yaml:"max_websocket_conns_per_ip"`
 }
 
 type GraphConfig struct {
@@ -148,6 +150,8 @@ func DefaultConfig() *Config {
 				CPUTemp: GraphMaxConfig{MaxMode: "off", MaxValue: 100},  // 100 Celsius
 				Network: GraphMaxConfig{MaxMode: "off", MaxValue: 1000}, // 1000 Mbps
 			},
+			MaxWebsocketConns:      100,
+			MaxWebsocketConnsPerIP: 5,
 		},
 		TUI: TUIConfig{
 			RefreshRate: time.Second,

@@ -42,6 +42,12 @@ web:
   # Compress HTTP responses and WebSockets (default: true)
   enable_compression: true
 
+  # Resource limits for WebSocket connections
+  # max_websocket_conns: Global limit (default: 100)
+  # max_websocket_conns_per_ip: Per-IP limit (default: 5)
+  max_websocket_conns: 100
+  max_websocket_conns_per_ip: 5
+
   # Trust X-Forwarded-Proto headers from reverse proxies for the Secure cookie flag
   trust_proxy: false
 

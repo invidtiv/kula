@@ -48,11 +48,34 @@ var upgrader = websocket.Upgrader{
 }
 
 func (s *Server) handleWebSocket(w http.ResponseWriter, r *http.Request) {
+	ip := getClientIP(r, s.cfg.TrustProxy)
+
+	s.wsMu.Lock()
+	if s.wsCount >= s.cfg.MaxWebsocketConns {
+		s.wsMu.Unlock()
+		log.Printf("WebSocket upgrade rejected: global limit reached (%d)", s.cfg.MaxWebsocketConns)
+		http.Error(w, "Global connection limit reached", http.StatusTooManyRequests)
+		return
+	}
+	if s.wsIPCounts[ip] >= s.cfg.MaxWebsocketConnsPerIP {
+		s.wsMu.Unlock()
+		log.Printf("WebSocket upgrade rejected: IP limit reached for %s (%d)", ip, s.cfg.MaxWebsocketConnsPerIP)
+		http.Error(w, "Per-IP connection limit reached", http.StatusTooManyRequests)
+		return
+	}
+	s.wsCount++
+	s.wsIPCounts[ip]++
+	s.wsMu.Unlock()
+
 	upg := upgrader
 	upg.EnableCompression = s.cfg.EnableCompression
 
 	conn, err := upg.Upgrade(w, r, nil)
 	if err != nil {
+		s.wsMu.Lock()
+		s.wsCount--
+		s.wsIPCounts[ip]--
+		s.wsMu.Unlock()
 		log.Printf("WebSocket upgrade error: %v", err)
 		return
 	}
@@ -67,6 +90,13 @@ func (s *Server) handleWebSocket(w http.ResponseWriter, r *http.Request) {
 	var unregOnce sync.Once
 	unregister := func() {
 		unregOnce.Do(func() {
+			s.wsMu.Lock()
+			s.wsCount--
+			s.wsIPCounts[ip]--
+			if s.wsIPCounts[ip] <= 0 {
+				delete(s.wsIPCounts, ip)
+			}
+			s.wsMu.Unlock()
 			s.hub.unregCh <- client
 		})
 	}

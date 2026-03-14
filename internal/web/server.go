@@ -39,6 +39,10 @@ type Server struct {
 	httpSrv   *http.Server
 	templates *template.Template
 	sriHashes map[string]string
+
+	wsMu      sync.Mutex
+	wsCount   int
+	wsIPCounts map[string]int
 }
 
 func NewServer(cfg config.WebConfig, global config.GlobalConfig, c *collector.Collector, s *storage.Store, storageDir string) *Server {
@@ -50,6 +54,7 @@ func NewServer(cfg config.WebConfig, global config.GlobalConfig, c *collector.Co
 		auth:      NewAuthManager(cfg.Auth, storageDir, cfg.TrustProxy),
 		hub:       newWSHub(),
 		sriHashes: make(map[string]string),
+		wsIPCounts: make(map[string]int),
 	}
 	srv.initializeTemplates()
 	srv.calculateSRIs()
