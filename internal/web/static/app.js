@@ -1342,6 +1342,10 @@
         };
 
         state.ws.onmessage = (evt) => {
+            if (evt.data.length > 1024 * 1024) { // 1MB limit
+                console.error('WebSocket message too large');
+                return;
+            }
             if (state.loadingHistory) {
                 // Buffer samples that arrive while history is loading so there
                 // is no gap when live streaming resumes after the fetch.

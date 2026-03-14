@@ -1,6 +1,7 @@
 package web
 
 	import (
+		"html"
 		"net/http"
 		"net/http/httptest"
 		"strings"
@@ -24,8 +25,8 @@ func TestTemplateInjection(t *testing.T) {
 		t.Fatalf("Expected status 200, got %d", rec.Code)
 	}
 
-	body := rec.Body.String()
-	
+	body := html.UnescapeString(rec.Body.String())
+
 	// Verify nonce is in CSP header
 	csp := rec.Header().Get("Content-Security-Policy")
 	if !strings.Contains(csp, "nonce-") {
@@ -67,7 +68,7 @@ func TestGameTemplateInjection(t *testing.T) {
 		t.Fatalf("Expected status 200, got %d", rec.Code)
 	}
 
-	body := rec.Body.String()
+	body := html.UnescapeString(rec.Body.String())
 	
 	// Verify SRI for game.js
 	sri := s.sriHashes["game.js"]
