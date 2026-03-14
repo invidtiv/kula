@@ -9,6 +9,8 @@
     // -------------------------------------------------------
     // Constants
     // -------------------------------------------------------
+    const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) || (navigator.maxTouchPoints > 0);
+
     const GAME_W = 800;
     const GAME_H = 600;
     const PLAYER_W = 40;
@@ -25,7 +27,8 @@
     const ENEMY_PAD_X = 12;
     const ENEMY_PAD_Y = 10;
     const ENEMY_STEP_DOWN = 18;
-    const STAR_COUNT = 120;
+    const STAR_COUNT = isMobile ? 50 : 120;
+    const MAX_PARTICLES = isMobile ? 30 : 150;
     const POWERUP_SPEED = 1.8;
     const POWERUP_SIZE = 18;
     const POWERUP_DURATION = 8000; // ms
@@ -54,11 +57,14 @@
     // Audio (Web Audio API — synthesized)
     // -------------------------------------------------------
     let audioCtx = null;
+    let isMuted = localStorage.getItem('kula_invaders_muted') === 'true';
+
     function ensureAudio() {
         if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
     }
 
     function playTone(freq, duration, type, vol) {
+        if (isMuted) return;
         try {
             ensureAudio();
             const osc = audioCtx.createOscillator();
@@ -106,6 +112,14 @@
     const $finalHigh = document.getElementById('final-high');
     const $levelupNum = document.getElementById('levelup-num');
     const $newHighScoreAlert = document.getElementById('new-highscore-alert');
+    const $btnLeft = document.getElementById('btn-left');
+    const $btnRight = document.getElementById('btn-right');
+    const $btnFire = document.getElementById('btn-fire');
+    const $btnPause = document.getElementById('btn-pause');
+    const $mobileControls = document.getElementById('mobile-controls');
+    const $btnFullscreen = document.getElementById('btn-fullscreen');
+    const $btnMute = document.getElementById('btn-mute');
+    const $muteIcon = document.getElementById('mute-icon');
 
     // -------------------------------------------------------
     // State
@@ -116,6 +130,7 @@
     let lives = 3;
     let highScore = parseInt(localStorage.getItem('kula_invaders_high') || '0', 10);
     let shootCooldown = 0;
+    let lastEscPress = 0;
 
     // Input
     const keys = {};
@@ -152,15 +167,17 @@
     // -------------------------------------------------------
     let scale = 1;
     function resize() {
-        const maxW = window.innerWidth * 0.92;
-        const maxH = window.innerHeight * 0.88;
-        scale = Math.min(maxW / GAME_W, maxH / GAME_H, 1.2);
+        const isFS = !!document.fullscreenElement;
+        const maxW = window.innerWidth * (isFS ? 0.98 : 0.92);
+        const maxH = window.innerHeight * (isFS ? 0.98 : 0.88);
+        scale = Math.min(maxW / GAME_W, maxH / GAME_H, isFS ? 2.5 : 1.2);
         canvas.width = GAME_W;
         canvas.height = GAME_H;
         canvas.style.width = (GAME_W * scale) + 'px';
         canvas.style.height = (GAME_H * scale) + 'px';
     }
     window.addEventListener('resize', resize);
+    document.addEventListener('fullscreenchange', resize);
     resize();
 
     // -------------------------------------------------------
@@ -180,10 +197,11 @@
     }
 
     function updateStars() {
+        const time = Date.now() * 0.002;
         for (const s of stars) {
             s.y += s.speed;
             if (s.y > GAME_H) { s.y = 0; s.x = Math.random() * GAME_W; }
-            s.brightness = 0.3 + Math.sin(Date.now() * 0.002 + s.x) * 0.2;
+            s.brightness = 0.3 + Math.sin(time + s.x) * 0.2;
         }
     }
 
@@ -219,8 +237,9 @@
         if (shootCooldown > 0) shootCooldown--;
 
         const cooldownMax = activePowerups.RAPID ? 5 : 15;
+        const wantsToShoot = keys[' '] || keys['ArrowUp'] || keys['w'];
 
-        if ((keys[' '] || keys['ArrowUp'] || keys['w']) && shootCooldown <= 0) {
+        if (wantsToShoot && shootCooldown <= 0) {
             shootCooldown = cooldownMax;
             SFX.shoot();
 
@@ -252,8 +271,10 @@
 
         // Ship body
         ctx.fillStyle = '#3b82f6';
-        ctx.shadowColor = '#3b82f6';
-        ctx.shadowBlur = 12;
+        if (!isMobile) {
+            ctx.shadowColor = '#3b82f6';
+            ctx.shadowBlur = 12;
+        }
         ctx.beginPath();
         ctx.moveTo(cx, player.y - 4);
         ctx.lineTo(player.x + player.w + 2, player.y + player.h);
@@ -272,8 +293,10 @@
 
         // Engine glow
         ctx.fillStyle = `rgba(6, 182, 212, ${0.5 + Math.sin(Date.now() * 0.01) * 0.3})`;
-        ctx.shadowColor = '#06b6d4';
-        ctx.shadowBlur = 8;
+        if (!isMobile) {
+            ctx.shadowColor = '#06b6d4';
+            ctx.shadowBlur = 8;
+        }
         ctx.fillRect(cx - 4, player.y + player.h, 8, 4 + Math.sin(Date.now() * 0.02) * 2);
         ctx.shadowBlur = 0;
 
@@ -281,8 +304,10 @@
         if (shieldHP > 0) {
             const alpha = 0.15 + shieldHP * 0.08;
             ctx.strokeStyle = `rgba(59, 130, 246, ${alpha})`;
-            ctx.shadowColor = '#3b82f6';
-            ctx.shadowBlur = 10;
+            if (!isMobile) {
+                ctx.shadowColor = '#3b82f6';
+                ctx.shadowBlur = 10;
+            }
             ctx.lineWidth = 2;
             ctx.beginPath();
             ctx.arc(cx, cy + 2, 28, 0, Math.PI * 2);
@@ -320,29 +345,42 @@
     }
 
     function updateEnemies() {
-        // Recalculate speed based on how many are alive
-        const aliveCount = enemies.filter(e => e.alive).length;
+        let aliveCount = 0;
+        let leftMost = GAME_W, rightMost = 0;
+
+        for (let i = 0; i < enemies.length; i++) {
+            const e = enemies[i];
+            if (!e.alive) continue;
+            aliveCount++;
+            if (e.x < leftMost) leftMost = e.x;
+            if (e.x + e.w > rightMost) rightMost = e.x + e.w;
+        }
+
         if (aliveCount === 0) return;
         enemySpeed = 0.4 + level * 0.15 + (1 - aliveCount / (ENEMY_ROWS * ENEMY_COLS)) * 2.5;
 
         // Move enemies
         let hitEdge = false;
-        for (const e of enemies) {
-            if (!e.alive) continue;
-            e.x += enemyDir * enemySpeed;
-            if (e.x + e.w > GAME_W - 5 || e.x < 5) hitEdge = true;
-        }
+        if (enemyDir === 1 && rightMost > GAME_W - 5) hitEdge = true;
+        else if (enemyDir === -1 && leftMost < 5) hitEdge = true;
 
         if (hitEdge) {
             enemyDir *= -1;
-            for (const e of enemies) {
+            for (let i = 0; i < enemies.length; i++) {
+                const e = enemies[i];
                 if (!e.alive) continue;
                 e.y += ENEMY_STEP_DOWN;
-                // Check if enemies reached the player
                 if (e.y + e.h >= player.y - 10) {
                     gameOver();
                     return;
                 }
+            }
+        } else {
+            const shift = enemyDir * enemySpeed;
+            for (let i = 0; i < enemies.length; i++) {
+                const e = enemies[i];
+                if (!e.alive) continue;
+                e.x += shift;
             }
         }
 
@@ -351,16 +389,16 @@
         const shootInterval = Math.max(20, 60 - level * 5);
         if (enemyShootTimer >= shootInterval) {
             enemyShootTimer = 0;
-            // Pick a random alive enemy from a bottom row
-            const alive = enemies.filter(e => e.alive);
-            if (alive.length > 0) {
-                // Prefer bottom enemies
-                const cols = {};
-                for (const e of alive) {
-                    const cKey = Math.round(e.x / (ENEMY_W + ENEMY_PAD_X));
-                    if (!cols[cKey] || e.y > cols[cKey].y) cols[cKey] = e;
-                }
-                const bottoms = Object.values(cols);
+            // Pick a random alive enemy column
+            const cols = {};
+            for (let i = 0; i < enemies.length; i++) {
+                const e = enemies[i];
+                if (!e.alive) continue;
+                const cKey = Math.round(e.x / (ENEMY_W + ENEMY_PAD_X));
+                if (!cols[cKey] || e.y > cols[cKey].y) cols[cKey] = e;
+            }
+            const bottoms = Object.values(cols);
+            if (bottoms.length > 0) {
                 const shooter = bottoms[Math.floor(Math.random() * bottoms.length)];
                 enemyBullets.push({
                     x: shooter.x + shooter.w / 2,
@@ -370,10 +408,11 @@
             }
         }
 
-        // Animate frames
-        enemyMoveTimer++;
-        if (enemyMoveTimer % 30 === 0) {
-            for (const e of enemies) e.frame = 1 - e.frame;
+        // Animate frames (only every ~0.5s)
+        if (Math.floor(Date.now() / 500) % 2 === 0) {
+            for (let i = 0; i < enemies.length; i++) enemies[i].frame = 0;
+        } else {
+            for (let i = 0; i < enemies.length; i++) enemies[i].frame = 1;
         }
     }
 
@@ -382,8 +421,10 @@
             if (!e.alive) continue;
             const color = ROW_COLORS[e.row] || '#ef4444';
             ctx.fillStyle = color;
-            ctx.shadowColor = color;
-            ctx.shadowBlur = 6;
+            if (!isMobile) {
+                ctx.shadowColor = color;
+                ctx.shadowBlur = 6;
+            }
 
             const cx = e.x + e.w / 2;
             const cy = e.y + e.h / 2;
@@ -433,6 +474,14 @@
                     score += ROW_SCORES[e.row] || 10;
                     SFX.hit();
                     spawnExplosion(e.x + e.w / 2, e.y + e.h / 2, ROW_COLORS[e.row]);
+                    
+                    // Check level complete immediately
+                    let anyAlive = false;
+                    for (let j = 0; j < enemies.length; j++) {
+                        if (enemies[j].alive) { anyAlive = true; break; }
+                    }
+                    if (!anyAlive) nextLevel();
+
                     // Chance to drop power-up
                     if (Math.random() < 0.08) {
                         spawnPowerup(e.x + e.w / 2, e.y + e.h / 2);
@@ -463,8 +512,10 @@
     function drawBullets() {
         // Player bullets — cyan glow
         ctx.fillStyle = '#06b6d4';
-        ctx.shadowColor = '#06b6d4';
-        ctx.shadowBlur = 8;
+        if (!isMobile) {
+            ctx.shadowColor = '#06b6d4';
+            ctx.shadowBlur = 8;
+        }
         for (const b of playerBullets) {
             ctx.fillRect(b.x, b.y, BULLET_W, BULLET_H);
             // Trail
@@ -476,8 +527,10 @@
         // Enemy bullets — colored glow
         for (const b of enemyBullets) {
             ctx.fillStyle = b.color || '#ef4444';
-            ctx.shadowColor = b.color || '#ef4444';
-            ctx.shadowBlur = 6;
+            if (!isMobile) {
+                ctx.shadowColor = b.color || '#ef4444';
+                ctx.shadowBlur = 6;
+            }
             ctx.beginPath();
             ctx.arc(b.x, b.y, 3, 0, Math.PI * 2);
             ctx.fill();
@@ -494,6 +547,7 @@
     // Particles
     // -------------------------------------------------------
     function spawnExplosion(x, y, color) {
+        if (particles.length > MAX_PARTICLES) return;
         const count = 15 + Math.floor(Math.random() * 10);
         for (let i = 0; i < count; i++) {
             const angle = Math.random() * Math.PI * 2;
@@ -525,8 +579,10 @@
         for (const p of particles) {
             ctx.globalAlpha = p.life;
             ctx.fillStyle = p.color;
-            ctx.shadowColor = p.color;
-            ctx.shadowBlur = 4;
+            if (!isMobile) {
+                ctx.shadowColor = p.color;
+                ctx.shadowBlur = 4;
+            }
             ctx.fillRect(p.x - p.size / 2, p.y - p.size / 2, p.size, p.size);
         }
         ctx.globalAlpha = 1;
@@ -687,6 +743,7 @@
         }
 
         $gameoverScreen.classList.remove('hidden');
+        updateMobileControlsVisibility();
         SFX.explode();
         canvas.style.cursor = 'default';
     }
@@ -705,6 +762,7 @@
             enemyBullets = [];
             powerups = [];
             state = 'playing';
+            updateMobileControlsVisibility();
             canvas.style.cursor = 'none';
         }, 2000);
     }
@@ -723,22 +781,56 @@
         shootCooldown = 0;
         initPlayer();
         initEnemies();
-        updateHUD();
+        updateHUD(true);
         $startScreen.classList.add('hidden');
         $gameoverScreen.classList.add('hidden');
         $pauseScreen.classList.add('hidden');
         state = 'playing';
+        updateMobileControlsVisibility();
         canvas.style.cursor = 'none';
+
+        if (isMobile) {
+            tryEnterImmersiveMode();
+        }
+    }
+
+    async function tryEnterImmersiveMode() {
+        try {
+            if (!document.fullscreenElement) {
+                await document.documentElement.requestFullscreen();
+            }
+            if (screen.orientation && screen.orientation.lock) {
+                await screen.orientation.lock('landscape').catch(() => {});
+            }
+        } catch (e) {
+            console.warn("Immersive mode failed:", e);
+        }
     }
 
     // -------------------------------------------------------
     // HUD
     // -------------------------------------------------------
-    function updateHUD() {
-        $hudScore.textContent = score;
-        $hudLevel.textContent = level;
-        $hudHigh.textContent = highScore;
-        $hudLives.textContent = '♥'.repeat(Math.max(0, lives));
+    let lastHUD = { score: -1, level: -1, high: -1, lives: '' };
+    function updateHUD(force = false) {
+        if (state !== 'playing' && state !== 'paused' && !force) return;
+
+        if (force || score !== lastHUD.score) {
+            $hudScore.textContent = score;
+            lastHUD.score = score;
+        }
+        if (force || level !== lastHUD.level) {
+            $hudLevel.textContent = level;
+            lastHUD.level = level;
+        }
+        if (force || highScore !== lastHUD.high) {
+            $hudHigh.textContent = highScore;
+            lastHUD.high = highScore;
+        }
+        const livesStr = '♥'.repeat(Math.max(0, lives));
+        if (force || livesStr !== lastHUD.lives) {
+            $hudLives.textContent = livesStr;
+            lastHUD.lives = livesStr;
+        }
     }
 
     // -------------------------------------------------------
@@ -754,13 +846,7 @@
         updateParticles();
         updatePowerups();
         updateHUD();
-
-        // Check level complete
-        if (enemies.filter(e => e.alive).length === 0) {
-            nextLevel();
-        }
     }
-
     function draw() {
         ctx.clearRect(0, 0, GAME_W, GAME_H);
 
@@ -810,15 +896,20 @@
         }
 
         if (e.key === 'Escape') {
-            if (state === 'playing') {
-                state = 'paused';
-                $pauseScreen.classList.remove('hidden');
-                canvas.style.cursor = 'default';
-            } else if (state === 'paused') {
-                state = 'playing';
-                $pauseScreen.classList.add('hidden');
-                canvas.style.cursor = 'none';
+            const now = Date.now();
+            const isInFS = !!document.fullscreenElement;
+            
+            if (isInFS) {
+                e.preventDefault(); // Prevent browser default FS exit
+                if (now - lastEscPress < 500) {
+                    if (document.exitFullscreen) document.exitFullscreen();
+                } else {
+                    togglePause();
+                }
+            } else {
+                togglePause();
             }
+            lastEscPress = now;
         }
 
         // Prevent scrolling with space/arrows
@@ -831,11 +922,128 @@
         keys[e.key] = false;
     });
 
+    // Mobile / Touch controls
+    function setupMobileControls() {
+        const handleBtn = (btn, key) => {
+            if (!btn) return;
+            btn.addEventListener('pointerdown', (e) => {
+                e.preventDefault();
+                keys[key] = true;
+            });
+            const release = (e) => {
+                e.preventDefault();
+                keys[key] = false;
+            };
+            btn.addEventListener('pointerup', release);
+            btn.addEventListener('pointerleave', release);
+            btn.addEventListener('pointercancel', release);
+        };
+
+        handleBtn($btnLeft, 'ArrowLeft');
+        handleBtn($btnRight, 'ArrowRight');
+        handleBtn($btnFire, ' ');
+
+        if ($btnPause) {
+            $btnPause.addEventListener('click', (e) => {
+                e.preventDefault();
+                togglePause();
+            });
+        }
+
+        // Global tap to start/resume/restart
+        window.addEventListener('pointerdown', (e) => {
+            if (isMobile) tryEnterImmersiveMode();
+            
+            // Only handle global taps if not clicking a button
+            if (e.target.closest('.mobile-btn') || e.target.closest('.hud-controls')) return;
+
+            if (state === 'start' || state === 'gameover') {
+                startGame();
+            } else if (state === 'paused') {
+                togglePause();
+            }
+        });
+
+        // Fullscreen Toggle
+        if ($btnFullscreen) {
+            $btnFullscreen.addEventListener('click', (e) => {
+                e.preventDefault();
+                toggleFullscreen();
+            });
+        }
+
+        // Mute Toggle
+        if ($btnMute) {
+            updateMuteIcon();
+            $btnMute.addEventListener('click', (e) => {
+                e.preventDefault();
+                toggleMute();
+            });
+        }
+    }
+
+    function toggleMute() {
+        isMuted = !isMuted;
+        localStorage.setItem('kula_invaders_muted', String(isMuted));
+        updateMuteIcon();
+    }
+
+    function updateMuteIcon() {
+        if (!$muteIcon) return;
+        if (isMuted) {
+            $muteIcon.innerHTML = `<path d="M11 5L6 9H2v6h4l5 4V5zM23 9l-6 6M17 9l6 6" />`;
+            $btnMute.style.opacity = '0.5';
+        } else {
+            $muteIcon.innerHTML = `<path d="M11 5L6 9H2v6h4l5 4V5zM19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07" />`;
+            $btnMute.style.opacity = '1';
+        }
+    }
+
+    function toggleFullscreen() {
+        if (!document.fullscreenElement) {
+            document.documentElement.requestFullscreen().catch(err => {
+                console.warn(`Error attempting to enable full-screen mode: ${err.message}`);
+            });
+        } else {
+            if (document.exitFullscreen) {
+                document.exitFullscreen();
+            }
+        }
+    }
+
+    function togglePause() {
+        if (state === 'playing') {
+            state = 'paused';
+            $pauseScreen.classList.remove('hidden');
+            canvas.style.cursor = 'default';
+        } else if (state === 'paused') {
+            state = 'playing';
+            $pauseScreen.classList.add('hidden');
+            canvas.style.cursor = 'none';
+        }
+        updateMobileControlsVisibility();
+    }
+
+    function updateMobileControlsVisibility() {
+        if (!isMobile || !$mobileControls) return;
+        if (state === 'playing') {
+            $mobileControls.classList.remove('hidden');
+        } else {
+            $mobileControls.classList.add('hidden');
+        }
+    }
+
+    // Replace keyboard pause logic to use the shared function
+    // (Search for Escape key handling in keyboard listener below)
+    
+    setupMobileControls();
+
     // -------------------------------------------------------
     // Init
     // -------------------------------------------------------
     initStars();
-    $hudHigh.textContent = highScore;
+    updateHUD(true);
+    updateMobileControlsVisibility();
     loop();
 
 })();
