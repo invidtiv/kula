@@ -4,6 +4,8 @@
 
 document.addEventListener('DOMContentLoaded', () => {
 
+    let currentTranslations = {};
+
     // ---- Theme Toggle Logic ----
     const themeBtn = document.getElementById('btn-theme');
     const previewDark = document.getElementById('preview-dark');
@@ -82,25 +84,102 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     });
 
+    // ---- Copy logic ----
+    function showCopied(btn) {
+        const originalText = btn.textContent;
+        btn.textContent = currentTranslations['btn_done'] || 'done';
+        btn.style.color = 'var(--accent-green)';
+        btn.style.borderColor = 'var(--accent-green)';
+        setTimeout(() => {
+            btn.textContent = originalText;
+            btn.style.color = '';
+            btn.style.borderColor = '';
+        }, 2000);
+    }
+
+    function copyToClipboard(text, btn) {
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+            navigator.clipboard.writeText(text).then(() => showCopied(btn)).catch(() => fallbackCopy(text, btn));
+        } else {
+            fallbackCopy(text, btn);
+        }
+    }
+
+    function fallbackCopy(text, btn) {
+        const textarea = document.createElement('textarea');
+        textarea.value = text;
+        textarea.style.position = 'fixed';
+        textarea.style.left = '-9999px';
+        textarea.style.top = '0';
+        document.body.appendChild(textarea);
+        textarea.focus();
+        textarea.select();
+        try {
+            document.execCommand('copy');
+            showCopied(btn);
+        } catch (err) {
+            console.error('Unable to copy', err);
+        }
+        document.body.removeChild(textarea);
+    }
+
     // ---- Copy buttons ----
     document.querySelectorAll('.copy-btn').forEach(btn => {
         btn.addEventListener('click', () => {
-            const code = btn.closest('pre').querySelector('code');
-            if (!code) return;
-            navigator.clipboard.writeText(code.textContent.trim()).then(() => {
-                const originalText = btn.textContent;
-                btn.textContent = '✓ copied';
-                btn.style.color = 'var(--accent-green)';
-                btn.style.borderColor = 'var(--accent-green)';
+            let codeElement;
+            if (btn.id === 'copy-install-btn') {
+                codeElement = document.getElementById('install-command');
+            } else {
+                codeElement = btn.closest('pre').querySelector('code');
+            }
 
-                setTimeout(() => {
-                    btn.textContent = originalText;
-                    btn.style.color = '';
-                    btn.style.borderColor = '';
-                }, 2000);
-            });
+            if (!codeElement) return;
+            copyToClipboard(codeElement.textContent.trim(), btn);
         });
     });
+
+
+    // ---- Install Command Logic ----
+    const installCommand = document.getElementById('install-command');
+    const toolTabs = document.querySelectorAll('.tool-tab');
+    const verifyCheckbox = document.getElementById('verify-checksum');
+
+    let selectedTool = 'curl';
+
+    const updateInstallCommand = () => {
+        const isVerified = verifyCheckbox.checked;
+        let command = '';
+
+        if (isVerified) {
+            if (selectedTool === 'curl') {
+                command = `KULA_INSTALL=$(mktemp) ; curl -o \${KULA_INSTALL} -fsSL https://kula.ovh/install ; echo "f0c064b20d23c948a4569a35cfe65589a36a497aa0d9037413c6e452471355dd  \${KULA_INSTALL}" | sha256sum -c || rm -f \${KULA_INSTALL} ; bash \${KULA_INSTALL} ; rm -f \${KULA_INSTALL}`;
+            } else {
+                command = `KULA_INSTALL=$(mktemp) ; wget -O \${KULA_INSTALL} -q https://kula.ovh/install ; echo "f0c064b20d23c948a4569a35cfe65589a36a497aa0d9037413c6e452471355dd  \${KULA_INSTALL}" | sha256sum -c || rm -f \${KULA_INSTALL} ; bash \${KULA_INSTALL} ; rm -f \${KULA_INSTALL}`;
+            }
+        } else {
+            if (selectedTool === 'curl') {
+                command = `sh -c "$(curl -fsSL https://raw.githubusercontent.com/c0m4r/kula/refs/heads/main/addons/install.sh)"`;
+            } else {
+                command = `sh -c "$(wget -qO- https://raw.githubusercontent.com/c0m4r/kula/refs/heads/main/addons/install.sh)"`;
+            }
+        }
+
+        installCommand.textContent = command;
+    };
+
+    toolTabs.forEach(tab => {
+        tab.addEventListener('click', () => {
+            toolTabs.forEach(t => t.classList.remove('active'));
+            tab.classList.add('active');
+            selectedTool = tab.dataset.tool;
+            updateInstallCommand();
+        });
+    });
+
+    if (verifyCheckbox) {
+        verifyCheckbox.addEventListener('change', updateInstallCommand);
+    }
+
 
     // ---- Scroll-reveal (fade-up) ----
     const observer = new IntersectionObserver((entries) => {
@@ -126,7 +205,6 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // ---- i18n Logic ----
     const langSelect = document.getElementById('lang-select');
-    let currentTranslations = {};
 
     async function loadLocale(lang) {
         try {
@@ -183,7 +261,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const savedLang = localStorage.getItem('kula-lang');
     const browserLang = navigator.language.split('-')[0];
     const supportedLangs = ['en', 'ar', 'bn', 'cs', 'de', 'es', 'fr', 'he', 'hi', 'id', 'it', 'ja', 'ko', 'ms', 'nl', 'pl', 'pt', 'ro', 'ru', 'sv', 'th', 'tr', 'uk', 'ur', 'vi', 'zh'];
-    
+
     let initialLang = 'en';
 
     if (urlLang && supportedLangs.includes(urlLang)) {

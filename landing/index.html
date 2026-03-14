@@ -39,81 +39,7 @@
     <link rel="alternate" hreflang="ur" href="https://kula.ovh/?lang=ur" />
     <link rel="alternate" hreflang="vi" href="https://kula.ovh/?lang=vi" />
     <link rel="alternate" hreflang="zh" href="https://kula.ovh/?lang=zh" />
-    <style>
-        /* Language Switcher Styles */
-        .language-switcher {
-            position: relative;
-            display: inline-flex;
-            align-items: center;
-            margin-right: 12px;
-        }
 
-        .lang-select {
-            background-color: rgba(255, 255, 255, 0.08);
-            border: 1px solid rgba(255, 255, 255, 0.15);
-            color: #fff;
-            padding: 6px 12px;
-            padding-right: 32px;
-            border-radius: 8px;
-            cursor: pointer;
-            font-size: 0.85rem;
-            font-weight: 500;
-            outline: none;
-            transition: all 0.2s ease;
-            appearance: none;
-            -webkit-appearance: none;
-            -moz-appearance: none;
-            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='10' fill='white' viewBox='0 0 16 16'%3E%3Cpath d='M7.247 11.14 2.451 5.658C1.885 5.013 2.345 4 3.204 4h9.592a1 1 0 0 1 .753 1.659l-4.796 5.48a1 1 0 0 1-1.506 0z'/%3E%3C/svg%3E");
-            background-repeat: no-repeat !important;
-            background-position: right 12px center !important;
-            background-size: 10px 10px !important;
-            min-width: 140px;
-        }
-
-        @media (max-width: 480px) {
-            .lang-select {
-                min-width: 90px;
-                padding-left: 6px;
-                padding-right: 24px;
-                background-position: right 6px center !important;
-                font-size: 0.8rem;
-            }
-        }
-
-        .lang-select:hover {
-            background-color: rgba(255, 255, 255, 0.12);
-            border-color: var(--accent-color);
-            box-shadow: 0 0 15px rgba(0, 123, 255, 0.1);
-        }
-
-        /* Style options for some browsers */
-        .lang-select option {
-            background-color: #121212;
-            color: #fff;
-            padding: 10px;
-        }
-
-        .light-mode .lang-select {
-            background-color: rgba(0, 0, 0, 0.05);
-            border: 1px solid rgba(0, 0, 0, 0.1);
-            color: #1a1a1a;
-            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='10' fill='black' viewBox='0 0 16 16'%3E%3Cpath d='M7.247 11.14 2.451 5.658C1.885 5.013 2.345 4 3.204 4h9.592a1 1 0 0 1 .753 1.659l-4.796 5.48a1 1 0 0 1-1.506 0z'/%3E%3C/svg%3E");
-        }
-
-        .light-mode .lang-select:hover {
-            background-color: rgba(0, 0, 0, 0.08);
-        }
-
-        .light-mode .lang-select option {
-            background-color: #fff;
-            color: #1a1a1a;
-        }
-
-        [data-i18n-html] {
-            display: inline-block;
-            width: 100%;
-        }
-    </style>
 </head>
 
 <body>
@@ -177,8 +103,7 @@
                 class="hero-logo">
             <h1>K U L A</h1>
             <p class="hero-tagline" data-i18n-html="hero_tagline">Lightweight, self-contained Linux® server
-                monitoring.<br>Real-time dashboard with
-                built-in storage engine.</p>
+                monitoring.</p>
             <p class="hero-sub" data-i18n="hero_sub">Zero dependencies. No external databases. Single binary. Just
                 deploy and go.</p>
             <div class="hero-buttons">
@@ -192,7 +117,32 @@
                 <a href="https://hub.docker.com/r/c0m4r/kula" class="btn btn-docker"><span role="img"
                         aria-label="whale">🐋</span> <span data-i18n="btn_docker">Docker Hub</span></a>
             </div>
+
         </section>
+
+        <!-- Installation -->
+        <section class="install fade-up" id="install">
+            <div class="section-label" data-i18n="label_install">Start</div>
+            <h2 class="section-heading" data-i18n="heading_install">Install Kula</h2>
+            <div class="install-card">
+                <div class="install-config">
+                    <div class="tool-tabs">
+                        <button class="tool-tab active" data-tool="curl">curl</button>
+                        <button class="tool-tab" data-tool="wget">wget</button>
+                    </div>
+                    <label class="checksum-toggle">
+                        <input type="checkbox" id="verify-checksum">
+                        <span class="toggle-slider"></span>
+                        <span class="toggle-label" data-i18n="install_verify">SHA-256</span>
+                    </label>
+                </div>
+                <div class="command-box">
+                    <pre><code id="install-command">sh -c "$(curl -fsSL https://raw.githubusercontent.com/c0m4r/kula/refs/heads/main/addons/install.sh)"</code><button class="copy-btn" id="copy-install-btn" data-i18n="btn_copy">Copy</button></pre>
+                </div>
+            </div>
+        </section>
+
+
 
         <!-- Features -->
         <section class="features fade-up" id="features">
@@ -335,7 +285,8 @@
         </div>
     </footer>
 
-    <script src="landing.js"></script>
+    <script src="landing.js" integrity="sha384-8a4cKC2s3Scgr+skIl2xphmKuPoWKTORrwU3cWgFRtl8yj+1T5yHjRUO1P7kZ1ZC"
+        crossorigin="anonymous"></script>
 </body>
 
 </html>
