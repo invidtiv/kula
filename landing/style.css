@@ -1041,6 +1041,10 @@ body.light-mode .command-box pre {
             justify-content: center;
             gap: 0.25rem;
         }
+
+        #install {
+            display: none;
+        }
     }
 
     @media (max-width: 380px) {
