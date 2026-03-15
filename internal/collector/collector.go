@@ -27,7 +27,6 @@ type Collector struct {
 	prevTCP   tcpRaw
 	prevEnergy map[string]uint64 // for Intel energy derivation
 	gpus      []GPUInfo
-	hasNvidiaSmi bool
 	storageDir string
 	prevTime  time.Time
 	debugDone bool // set after the first Collect(); suppresses repeated debug logs
@@ -40,6 +39,7 @@ func New(cfg config.GlobalConfig, collCfg config.CollectionConfig, storageDir st
 		storageDir: storageDir,
 		prevNet:    make(map[string]netRaw),
 		prevDisk:   make(map[string]diskRaw),
+		prevEnergy: make(map[string]uint64),
 	}
 }
 

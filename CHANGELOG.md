@@ -7,6 +7,13 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 Types of changes: Added, Changed, Deprecated, Removed, Fixed, Security
 
+## [Unreleased]
+
+### Added
+
+- GPU monitoring
+- New env var: KULA_LOGLEVEL for log level override
+
 ## [0.9.2] - 2026-03-15
 
 ### Fixed

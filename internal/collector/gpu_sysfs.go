@@ -31,16 +31,18 @@ func (c *Collector) collectSysfsGPUStats(info GPUInfo, s *GPUStats, elapsed floa
 			energyMicroJ := c.parseUint(energyMicroJString, 10, 64, "gpu.energy")
 			if energyMicroJ > 0 {
 				key := "energy:" + info.DRMPath
-				if c.prevEnergy == nil {
-					c.prevEnergy = make(map[string]uint64)
-				}
 				if prev, ok := c.prevEnergy[key]; ok && elapsed > 0 {
-					delta := energyMicroJ - prev
-					// If s.PowerW was set from power1_input/average, only override if it's 0 or we prefer energy derivation
-					// Usually energy imputation is more accurate on older Intel
-					if s.PowerW == 0 {
-						s.PowerW = float64(delta) / 1e6 / elapsed
-						c.debugf("gpu[%d]: derived power = %.2f W (delta: %d, dt: %.2fs)", s.Index, s.PowerW, delta, elapsed)
+					if energyMicroJ < prev {
+						// Counter reset or wrap
+						c.debugf("gpu[%d]: energy counter reset (prev: %d, now: %d)", s.Index, prev, energyMicroJ)
+					} else {
+						delta := energyMicroJ - prev
+						// If s.PowerW was set from power1_input/average, only override if it's 0 or we prefer energy derivation
+						// Usually energy imputation is more accurate on older Intel
+						if s.PowerW == 0 {
+							s.PowerW = float64(delta) / 1e6 / elapsed
+							c.debugf("gpu[%d]: derived power = %.2f W (delta: %d, dt: %.2fs)", s.Index, s.PowerW, delta, elapsed)
+						}
 					}
 				}
 				c.prevEnergy[key] = energyMicroJ

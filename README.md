@@ -30,6 +30,7 @@ stores them in a built-in tiered ring-buffer storage engine, and serves them thr
 | Metric | What's Collected |
 |--------|-----------------|
 | **CPU** | Total usage (user, system, iowait, irq, softirq, steal) + core count |
+| **GPU** | Load, Power consumption, VRAM |
 | **Load** | 1 / 5 / 15 min averages, running & total tasks |
 | **Memory** | Total, free, available, used, buffers, cached, shmem |
 | **Swap** | Total, free, used |
@@ -38,7 +39,7 @@ stores them in a built-in tiered ring-buffer storage engine, and serves them thr
 | **System** | Uptime, entropy, clock sync, hostname, logged-in user count |
 | **Processes** | Running, sleeping, blocked, zombie counts |
 | **Self** | Kula's own CPU%, RSS memory, open file descriptors |
-| **Thermal** | CPU and Disk temperatures |
+| **Thermal** | CPU, GPU and Disk temperatures |
 
 ---
 

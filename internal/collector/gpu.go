@@ -22,9 +22,10 @@ func (c *Collector) discoverGPUs() {
 		return
 	}
 
-	// Check if nvidia-smi exists
+	// Check if nvidia-smi exists (local check for logging/discovery)
+	hasNvidiaSmi := false
 	if _, err := exec.LookPath("nvidia-smi"); err == nil {
-		c.hasNvidiaSmi = true
+		hasNvidiaSmi = true
 		c.debugf("gpu: found nvidia-smi")
 	} else {
 		c.debugf("gpu: nvidia-smi not found in PATH")
@@ -85,7 +86,7 @@ func (c *Collector) discoverGPUs() {
 		if driver == "nvidia" {
 			_, err := os.Stat(filepath.Join(info.HwmonPath, "temp1_input"))
 			info.UseLogFile = err != nil
-			if info.UseLogFile && !c.hasNvidiaSmi {
+			if info.UseLogFile && !hasNvidiaSmi {
 				c.debugf("gpu[%d]: closed NVIDIA driver detected but nvidia-smi not found/no log exporter active", info.Index)
 			}
 		}
@@ -133,6 +134,8 @@ func (c *Collector) collectGPUs(elapsed float64) []GPUStats {
 		return nil
 	}
 
+	nvStats := c.parseNvidiaLog()
+
 	var stats []GPUStats
 	for _, info := range c.gpus {
 		s := GPUStats{
@@ -143,8 +146,14 @@ func (c *Collector) collectGPUs(elapsed float64) []GPUStats {
 
 		// Dispatch based on driver
 		if info.UseLogFile {
-			c.debugf("gpu[%d]: collecting stats via nvidia.log", info.Index)
-			c.collectNvidiaStats(&s)
+			if nvS, ok := nvStats[strings.ToLower(info.PciID)]; ok {
+				s.Temperature = nvS.Temperature
+				s.LoadPct = nvS.LoadPct
+				s.VRAMUsed = nvS.VRAMUsed
+				s.VRAMTotal = nvS.VRAMTotal
+				s.VRAMUsedPct = nvS.VRAMUsedPct
+				s.PowerW = nvS.PowerW
+			}
 		} else {
 			c.debugf("gpu[%d]: collecting stats via sysfs", info.Index)
 			c.collectSysfsGPUStats(info, &s, elapsed)

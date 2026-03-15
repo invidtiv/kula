@@ -8,20 +8,22 @@ import (
 	"time"
 )
 
-func (c *Collector) collectNvidiaStats(s *GPUStats) {
-	// Instead of calling nvidia-smi directly (which is blocked by Landlock),
-	// we read from a log file populated by an external helper.
+// parseNvidiaLog reads the entire nvidia.log once and returns stats mapped by PCI ID.
+// This is more efficient for multi-GPU setups than reading the file per-GPU.
+func (c *Collector) parseNvidiaLog() map[string]GPUStats {
+	statsMap := make(map[string]GPUStats)
+
 	logPath := filepath.Join(c.storageDir, "nvidia.log")
 	f, err := os.Open(logPath)
 	if err != nil {
 		c.debugf("gpu: failed to open nvidia.log: %v", err)
-		return
+		return statsMap
 	}
 	defer func() { _ = f.Close() }()
 
 	info, err := f.Stat()
 	if err != nil {
-		return
+		return statsMap
 	}
 
 	// Hardening: check for overly permissive permissions (group/others should not have access)
@@ -36,13 +38,13 @@ func (c *Collector) collectNvidiaStats(s *GPUStats) {
 	}
 	if time.Since(info.ModTime()) > staleThreshold {
 		c.debugf("gpu: nvidia.log is stale (age: %v, threshold: %v)", time.Since(info.ModTime()), staleThreshold)
-		return
+		return statsMap
 	}
 
 	data, err := io.ReadAll(f)
 	if err != nil {
 		c.debugf("gpu: failed to read nvidia.log: %v", err)
-		return
+		return statsMap
 	}
 
 	c.debugf("gpu: read nvidia.log (%d bytes)", len(data))
@@ -57,45 +59,37 @@ func (c *Collector) collectNvidiaStats(s *GPUStats) {
 				nvPciID = nvPciID[4:]
 			}
 
-			// Find the info for this s.Index to get PciID
-			var targetPciID string
-			for _, info := range c.gpus {
-				if info.Index == s.Index {
-					targetPciID = strings.ToLower(info.PciID)
-					break
-				}
+			s := GPUStats{}
+			if val := c.trimNvidiaField(fields[1]); val != "" {
+				s.Temperature = c.parseFloat(val, 64, "gpu.temp")
+			}
+			if val := c.trimNvidiaField(fields[2]); val != "" {
+				s.LoadPct = c.parseFloat(val, 64, "gpu.load")
+			}
+			if val := c.trimNvidiaField(fields[3]); val != "" {
+				s.VRAMUsed = c.parseUint(val, 10, 64, "gpu.vram.used") * 1024 * 1024
+			}
+			if val := c.trimNvidiaField(fields[4]); val != "" {
+				s.VRAMTotal = c.parseUint(val, 10, 64, "gpu.vram.total") * 1024 * 1024
 			}
 
-			if nvPciID == targetPciID {
-				c.debugf("gpu[%d]: matched PCI %s in log", s.Index, nvPciID)
-
-				if val := c.trimNvidiaField(fields[1]); val != "" {
-					s.Temperature = c.parseFloat(val, 64, "gpu.temp")
-				}
-				if val := c.trimNvidiaField(fields[2]); val != "" {
-					s.LoadPct = c.parseFloat(val, 64, "gpu.load")
-				}
-				if val := c.trimNvidiaField(fields[3]); val != "" {
-					s.VRAMUsed = c.parseUint(val, 10, 64, "gpu.vram.used") * 1024 * 1024
-				}
-				if val := c.trimNvidiaField(fields[4]); val != "" {
-					s.VRAMTotal = c.parseUint(val, 10, 64, "gpu.vram.total") * 1024 * 1024
-				}
-
-				if s.VRAMTotal > 0 {
-					s.VRAMUsedPct = round2(float64(s.VRAMUsed) / float64(s.VRAMTotal) * 100.0)
-				}
-				if val := c.trimNvidiaField(fields[5]); val != "" {
-					s.PowerW = c.parseFloat(val, 64, "gpu.power")
-				}
-				break
+			if s.VRAMTotal > 0 {
+				s.VRAMUsedPct = round2(float64(s.VRAMUsed) / float64(s.VRAMTotal) * 100.0)
 			}
+			if val := c.trimNvidiaField(fields[5]); val != "" {
+				s.PowerW = c.parseFloat(val, 64, "gpu.power")
+			}
+
+			statsMap[nvPciID] = s
 		}
 	}
+
+	return statsMap
 }
 
 func (c *Collector) trimNvidiaField(s string) string {
 	s = strings.TrimSpace(s)
+	// Handle [N/A] values gracefully to avoid noisy parse errors in debug log
 	if s == "[N/A]" || s == "N/A" || strings.HasPrefix(s, "N/A ") {
 		return ""
 	}

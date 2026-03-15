@@ -1417,7 +1417,10 @@
         if (s.gpu && s.gpu.length > 0) {
             const g = s.gpu.find(g => g.name === state.selectedGpuLoad) || s.gpu[0];
             if (g) {
-                el('gpuload-subtitle', `${(g.load_pct || 0).toFixed(1)}% load, ${(g.power_w || 0).toFixed(1)}W`);
+                const parts = [];
+                if (g.load_pct > 0) parts.push(`${g.load_pct.toFixed(1)}% load`);
+                if (g.power_w > 0) parts.push(`${g.power_w.toFixed(1)}W`);
+                el('gpuload-subtitle', parts.length > 0 ? parts.join(', ') : 'No metrics available');
                 if (g.vram_total > 0) {
                     el('vram-subtitle', `${formatBytesShort(g.vram_used || 0)} / ${formatBytesShort(g.vram_total)} (${(g.vram_pct || 0).toFixed(1)}%)`);
                 }

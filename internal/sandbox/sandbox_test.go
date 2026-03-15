@@ -45,8 +45,9 @@ func runHelperProcess() {
 	}
 
 	// 1. Test Network: Try to dial an external address
-	// We use a non-existent IP to avoid actual network traffic, 
-	// but Landlock should deny the operation immediately.
+	// Note: Landlock V5 primarily restricts TCP BIND. Restricting outgoing CONNECT
+	// typically requires network namespaces or other mechanisms. This test may pass
+	// if the environment lacks connectivity or timing out, but we keep it as a baseline.
 	conn, err := net.DialTimeout("tcp", "8.8.8.8:53", 100*time.Millisecond)
 	if err == nil {
 		_ = conn.Close()

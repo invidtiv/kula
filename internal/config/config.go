@@ -178,9 +178,6 @@ func Load(path string) (*Config, error) {
 	if listen := os.Getenv("KULA_LISTEN"); listen != "" {
 		cfg.Web.Listen = listen
 	}
-	if bind := os.Getenv("KULA_BIND"); bind != "" {
-		cfg.Web.Listen = bind
-	}
 	if portStr := os.Getenv("KULA_PORT"); portStr != "" {
 		if port, err := strconv.Atoi(portStr); err == nil {
 			if port > 0 && port <= 65535 {
