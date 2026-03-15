@@ -83,14 +83,14 @@ func (c *Collector) parseNetDev() map[string]netRaw {
 			continue
 		}
 		n := netRaw{}
-		n.rxBytes = parseUint(fields[0], 10, 64, "network.rxBytes")
-		n.rxPkts = parseUint(fields[1], 10, 64, "network.rxPkts")
-		n.rxErrs = parseUint(fields[2], 10, 64, "network.rxErrs")
-		n.rxDrop = parseUint(fields[3], 10, 64, "network.rxDrop")
-		n.txBytes = parseUint(fields[8], 10, 64, "network.txBytes")
-		n.txPkts = parseUint(fields[9], 10, 64, "network.txPkts")
-		n.txErrs = parseUint(fields[10], 10, 64, "network.txErrs")
-		n.txDrop = parseUint(fields[11], 10, 64, "network.txDrop")
+		n.rxBytes = c.parseUint(fields[0], 10, 64, "network.rxBytes")
+		n.rxPkts = c.parseUint(fields[1], 10, 64, "network.rxPkts")
+		n.rxErrs = c.parseUint(fields[2], 10, 64, "network.rxErrs")
+		n.rxDrop = c.parseUint(fields[3], 10, 64, "network.rxDrop")
+		n.txBytes = c.parseUint(fields[8], 10, 64, "network.txBytes")
+		n.txPkts = c.parseUint(fields[9], 10, 64, "network.txPkts")
+		n.txErrs = c.parseUint(fields[10], 10, 64, "network.txErrs")
+		n.txDrop = c.parseUint(fields[11], 10, 64, "network.txDrop")
 		result[name] = n
 		c.debugf(" net: monitoring interface %q", name)
 	}
@@ -247,7 +247,7 @@ func readTCPRaw() tcpRaw {
 }
 
 // DetectLinkSpeed returns the combined theoretical maximum throughput of all UP interfaces in Mbps, or 0 if undetected.
-func DetectLinkSpeed() float64 {
+func (c *Collector) DetectLinkSpeed() float64 {
 	var totalSpeedMbps float64
 	entries, err := os.ReadDir(filepath.Join(sysPath, "class", "net"))
 	if err == nil {

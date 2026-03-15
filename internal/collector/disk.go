@@ -80,10 +80,10 @@ func (c *Collector) parseDiskStats() map[string]diskRaw {
 		}
 
 		d := diskRaw{}
-		d.reads = parseUint(fields[3], 10, 64, "disk.reads")
-		d.readSect = parseUint(fields[5], 10, 64, "disk.readSect")
-		d.writes = parseUint(fields[7], 10, 64, "disk.writes")
-		d.writeSect = parseUint(fields[9], 10, 64, "disk.writeSect")
+		d.reads = c.parseUint(fields[3], 10, 64, "disk.reads")
+		d.readSect = c.parseUint(fields[5], 10, 64, "disk.readSect")
+		d.writes = c.parseUint(fields[7], 10, 64, "disk.writes")
+		d.writeSect = c.parseUint(fields[9], 10, 64, "disk.writeSect")
 		result[name] = d
 		c.debugf(" disk: monitoring device %q", name)
 	}
@@ -158,7 +158,7 @@ func (c *Collector) collectDisks(elapsed float64) DiskStats {
 			dev.WriteBytesPS = float64(cur.writeSect-prev.writeSect) * 512.0 / elapsed
 		}
 
-		dev.Temperature, dev.Sensors = getDiskTemperature(name)
+		dev.Temperature, dev.Sensors = c.getDiskTemperature(name)
 
 		stats.Devices = append(stats.Devices, dev)
 	}
@@ -335,7 +335,7 @@ func (c *Collector) scanMounts(f *os.File, result *[]FileSystemInfo, seen map[st
 
 
 // getDiskTemperature attempts to read temperature for a disk device.
-func getDiskTemperature(devName string) (float64, []DiskTempSensor) {
+func (c *Collector) getDiskTemperature(devName string) (float64, []DiskTempSensor) {
 	pathsToCheck := []string{
 		filepath.Join(sysPath, "class", "block", devName, "device", "hwmon"),
 		filepath.Join(sysPath, "class", "block", devName, "device", "device", "hwmon"),
@@ -371,8 +371,15 @@ func getDiskTemperature(devName string) (float64, []DiskTempSensor) {
 				}
 
 				valStr := strings.TrimSpace(string(data))
-				tempMilliC := parseUint(valStr, 10, 64, "disk.temp")
+				// Using parseInt without fieldName to avoid double logging (caller handles it below with path)
+				tempMilliC := c.parseInt(valStr, 10, 64, "")
 				if tempMilliC == 0 && valStr != "0" {
+					c.debugf(" disk.temp: failed to parse %q (%q)", input, valStr)
+					continue
+				}
+
+				// Handle absolute zero fallback (-273.15C) which is common for unavailable sensors
+				if tempMilliC <= -273000 {
 					continue
 				}
 
@@ -419,7 +426,7 @@ func getDiskTemperature(devName string) (float64, []DiskTempSensor) {
 }
 
 // DetectDiskTjMax returns the maximum critical temperature of any disk in Celsius, or 0 if undetected.
-func DetectDiskTjMax() float64 {
+func (c *Collector) DetectDiskTjMax() float64 {
 	var maxCrit float64
 
 	matches, err := filepath.Glob(filepath.Join(sysPath, "class", "block", "*"))
@@ -456,12 +463,14 @@ func DetectDiskTjMax() float64 {
 					data, err := os.ReadFile(crit)
 					if err == nil {
 						valStr := strings.TrimSpace(string(data))
-						tempMilliC := parseUint(valStr, 10, 64, "disk.temp_crit")
+						tempMilliC := c.parseInt(valStr, 10, 64, "disk.temp_crit")
 						if tempMilliC > 0 {
 							val := float64(tempMilliC) / 1000.0
 							if val > maxCrit {
 								maxCrit = val
 							}
+						} else if tempMilliC < 0 && valStr != "0" {
+							c.debugf(" disk.temp_crit: ignoring negative value %d at %q", tempMilliC, crit)
 						}
 					}
 				}

@@ -65,8 +65,8 @@ func (c *Collector) Collect() *Sample {
 	}
 
 	s.CPU = c.collectCPU(elapsed)
-	s.CPU.Temperature, s.CPU.Sensors = collectCPUTemperature()
-	s.LoadAvg = collectLoadAvg()
+	s.CPU.Temperature, s.CPU.Sensors = c.collectCPUTemperature()
+	s.LoadAvg = c.collectLoadAvg()
 	s.Memory = collectMemory()
 	s.Swap = collectSwap()
 	s.Network = c.collectNetwork(elapsed)

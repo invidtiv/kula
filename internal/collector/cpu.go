@@ -26,7 +26,7 @@ var (
 	sysTempSensors []sysSensor
 )
 
-func parseProcStat() []cpuRaw {
+func (c *Collector) parseProcStat() []cpuRaw {
 	f, err := os.Open(filepath.Join(procPath, "stat"))
 	if err != nil {
 		return nil
@@ -45,27 +45,27 @@ func parseProcStat() []cpuRaw {
 			continue
 		}
 		r := cpuRaw{id: fields[0]}
-		r.user = parseUint(fields[1], 10, 64, "cpu.user")
-		r.nice = parseUint(fields[2], 10, 64, "cpu.nice")
-		r.system = parseUint(fields[3], 10, 64, "cpu.system")
-		r.idle = parseUint(fields[4], 10, 64, "cpu.idle")
+		r.user = c.parseUint(fields[1], 10, 64, "cpu.user")
+		r.nice = c.parseUint(fields[2], 10, 64, "cpu.nice")
+		r.system = c.parseUint(fields[3], 10, 64, "cpu.system")
+		r.idle = c.parseUint(fields[4], 10, 64, "cpu.idle")
 		if len(fields) > 5 {
-			r.iowait = parseUint(fields[5], 10, 64, "cpu.iowait")
+			r.iowait = c.parseUint(fields[5], 10, 64, "cpu.iowait")
 		}
 		if len(fields) > 6 {
-			r.irq = parseUint(fields[6], 10, 64, "cpu.irq")
+			r.irq = c.parseUint(fields[6], 10, 64, "cpu.irq")
 		}
 		if len(fields) > 7 {
-			r.softirq = parseUint(fields[7], 10, 64, "cpu.softirq")
+			r.softirq = c.parseUint(fields[7], 10, 64, "cpu.softirq")
 		}
 		if len(fields) > 8 {
-			r.steal = parseUint(fields[8], 10, 64, "cpu.steal")
+			r.steal = c.parseUint(fields[8], 10, 64, "cpu.steal")
 		}
 		if len(fields) > 9 {
-			r.guest = parseUint(fields[9], 10, 64, "cpu.guest")
+			r.guest = c.parseUint(fields[9], 10, 64, "cpu.guest")
 		}
 		if len(fields) > 10 {
-			r.guestNice = parseUint(fields[10], 10, 64, "cpu.guest_nice")
+			r.guestNice = c.parseUint(fields[10], 10, 64, "cpu.guest_nice")
 		}
 		result = append(result, r)
 	}
@@ -100,7 +100,7 @@ func calcCorePct(prev, cur cpuRaw) CPUCoreStats {
 }
 
 func (c *Collector) collectCPU(_ float64) CPUStats {
-	current := parseProcStat()
+	current := c.parseProcStat()
 	if current == nil {
 		return CPUStats{}
 	}
@@ -132,7 +132,7 @@ func (c *Collector) collectCPU(_ float64) CPUStats {
 	return result
 }
 
-func collectLoadAvg() LoadAvg {
+func (c *Collector) collectLoadAvg() LoadAvg {
 	data, err := os.ReadFile(filepath.Join(procPath, "loadavg"))
 	if err != nil {
 		return LoadAvg{}
@@ -142,9 +142,9 @@ func collectLoadAvg() LoadAvg {
 		return LoadAvg{}
 	}
 	la := LoadAvg{}
-	la.Load1 = parseFloat(fields[0], 64, "loadavg.1")
-	la.Load5 = parseFloat(fields[1], 64, "loadavg.5")
-	la.Load15 = parseFloat(fields[2], 64, "loadavg.15")
+	la.Load1 = c.parseFloat(fields[0], 64, "loadavg.1")
+	la.Load5 = c.parseFloat(fields[1], 64, "loadavg.5")
+	la.Load15 = c.parseFloat(fields[2], 64, "loadavg.15")
 
 	parts := strings.Split(fields[3], "/")
 	if len(parts) == 2 {
@@ -155,7 +155,7 @@ func collectLoadAvg() LoadAvg {
 }
 
 // collectCPUTemperature reads the CPU temperature from sysfs.
-func collectCPUTemperature() (float64, []CPUTempSensor) {
+func (c *Collector) collectCPUTemperature() (float64, []CPUTempSensor) {
 	if sysTempSensors == nil {
 		sysTempSensors = discoverCPUTempPath()
 	}
@@ -174,8 +174,10 @@ func collectCPUTemperature() (float64, []CPUTempSensor) {
 		}
 
 		valStr := strings.TrimSpace(string(data))
-		tempMilliC := parseUint(valStr, 10, 64, "cpu.temp")
+		// Use parseInt without fieldName to avoid double logging (caller handles it below with path)
+		tempMilliC := c.parseInt(valStr, 10, 64, "")
 		if tempMilliC == 0 && valStr != "0" {
+			c.debugf(" cpu.temp: failed to parse %q (%q)", sensor.Path, valStr)
 			continue
 		}
 
@@ -328,7 +330,7 @@ func discoverCPUTempPath() []sysSensor {
 }
 
 // DetectTjMax returns the maximum critical temperature in Celsius, or 0 if undetected.
-func DetectTjMax() float64 {
+func (c *Collector) DetectTjMax() float64 {
 	if sysTempSensors == nil {
 		sysTempSensors = discoverCPUTempPath()
 	}
@@ -339,12 +341,14 @@ func DetectTjMax() float64 {
 		data, err := os.ReadFile(critPath)
 		if err == nil {
 			valStr := strings.TrimSpace(string(data))
-			tempMilliC := parseUint(valStr, 10, 64, "cpu.temp_crit")
+			tempMilliC := c.parseInt(valStr, 10, 64, "cpu.temp_crit")
 			if tempMilliC > 0 {
 				val := float64(tempMilliC) / 1000.0
 				if val > maxCrit {
 					maxCrit = val
 				}
+			} else if tempMilliC < 0 && valStr != "0" {
+				c.debugf(" cpu.temp_crit: ignoring negative value %d at %q", tempMilliC, critPath)
 			}
 		}
 	}

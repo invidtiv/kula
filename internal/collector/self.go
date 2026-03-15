@@ -25,8 +25,8 @@ func (c *Collector) collectSelf(elapsed float64) SelfStats {
 			// utime is field index 11 (0-based from after state), stime is 12
 			if len(fields) > 12 {
 				cur := selfRaw{}
-				cur.utime = parseUint(fields[11], 10, 64, "self.utime")
-				cur.stime = parseUint(fields[12], 10, 64, "self.stime")
+				cur.utime = c.parseUint(fields[11], 10, 64, "self.utime")
+				cur.stime = c.parseUint(fields[12], 10, 64, "self.stime")
 
 				if c.prevSelf.utime > 0 && elapsed > 0 {
 					// Clock ticks per second is typically 100
@@ -46,7 +46,7 @@ func (c *Collector) collectSelf(elapsed float64) SelfStats {
 	if err == nil {
 		for _, line := range strings.Split(string(statusData), "\n") {
 			if strings.HasPrefix(line, "VmRSS:") {
-				s.MemRSS = parseStatusKB(line, "self.rss") * 1024
+				s.MemRSS = c.parseStatusKB(line, "self.rss") * 1024
 				break
 			}
 		}
@@ -60,10 +60,10 @@ func (c *Collector) collectSelf(elapsed float64) SelfStats {
 	return s
 }
 
-func parseStatusKB(line string, metricName string) uint64 {
+func (c *Collector) parseStatusKB(line string, fieldName string) uint64 {
 	parts := strings.Fields(line)
 	if len(parts) >= 2 {
-		val := parseUint(parts[1], 10, 64, metricName)
+		val := c.parseUint(parts[1], 10, 64, fieldName)
 		return val
 	}
 	return 0

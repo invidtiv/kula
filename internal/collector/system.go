@@ -24,7 +24,7 @@ func (c *Collector) collectSystem() SystemStats {
 	if data, err := os.ReadFile(filepath.Join(procPath, "uptime")); err == nil {
 		fields := strings.Fields(string(data))
 		if len(fields) >= 1 {
-			s.Uptime = parseFloat(fields[0], 64, "system.uptime")
+			s.Uptime = c.parseFloat(fields[0], 64, "system.uptime")
 			s.UptimeHuman = formatUptime(s.Uptime)
 		}
 	}
