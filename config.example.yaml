@@ -96,11 +96,8 @@ web:
     password_salt: ""
     session_timeout: 24h
     argon2:
-      # Tune based on modern hardware:
-      # https://cheatsheetseries.owasp.org/cheatsheets/Password_Storage_Cheat_Sheet.html
-      # time: 2-4, memory: 65536-262144
-      time: 1
-      memory: 65536
+      time: 3
+      memory: 32768 # double the OWASP minimum
       threads: 4
 
 # TUI settings
