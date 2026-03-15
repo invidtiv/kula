@@ -8,7 +8,7 @@ import (
 func TestParseDiskStats(t *testing.T) {
 	procPath = "testdata/proc"
 
-	c := New(config.GlobalConfig{}, config.CollectionConfig{})
+	c := New(config.GlobalConfig{}, config.CollectionConfig{}, "")
 	raw := c.parseDiskStats()
 	if len(raw) != 1 {
 		t.Fatalf("expected 1 disk, got %d", len(raw))
@@ -28,7 +28,7 @@ func TestParseDiskStats(t *testing.T) {
 func TestCollectFileSystems(t *testing.T) {
 	procPath = "testdata/proc"
 
-	c := New(config.GlobalConfig{}, config.CollectionConfig{})
+	c := New(config.GlobalConfig{}, config.CollectionConfig{}, "")
 	fs := c.collectFileSystems()
 	// Note: syscall.Statfs is executed on the mount point. Since the mock file says "/",
 	// and "/" exists on the real system, it will return real disk space stats for "/".
@@ -43,7 +43,7 @@ func TestCollectFileSystems(t *testing.T) {
 func TestCollectFileSystemsDocker(t *testing.T) {
 	procPath = "testdata/docker_proc"
 
-	c := New(config.GlobalConfig{}, config.CollectionConfig{})
+	c := New(config.GlobalConfig{}, config.CollectionConfig{}, "")
 	fs := c.collectFileSystems()
 	// Should only have 'overlay' at '/'
 	// /etc/resolv.conf etc should be ignored
@@ -59,7 +59,7 @@ func TestParseDiskStatsConfig(t *testing.T) {
 	procPath = "testdata/proc_with_partitions"
 
 	// 1. Default (no config) - should skip sda1, sda2
-	c1 := New(config.GlobalConfig{}, config.CollectionConfig{})
+	c1 := New(config.GlobalConfig{}, config.CollectionConfig{}, "")
 	raw1 := c1.parseDiskStats()
 	if len(raw1) != 1 {
 		t.Errorf("expected 1 disk (sda), got %d: %v", len(raw1), raw1)
@@ -71,7 +71,7 @@ func TestParseDiskStatsConfig(t *testing.T) {
 	// 2. Explicit config - should allow sda1 even if it's a partition
 	c2 := New(config.GlobalConfig{}, config.CollectionConfig{
 		Devices: []string{"sda", "sda1"},
-	})
+	}, "")
 	raw2 := c2.parseDiskStats()
 	if len(raw2) != 2 {
 		t.Errorf("expected 2 disks (sda, sda1), got %d: %v", len(raw2), raw2)

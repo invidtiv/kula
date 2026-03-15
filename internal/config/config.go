@@ -68,6 +68,7 @@ type WebConfig struct {
 type GraphConfig struct {
 	CPUTemp  GraphMaxConfig `yaml:"cpu_temp"`
 	DiskTemp GraphMaxConfig `yaml:"disk_temp"`
+	GPUTemp  GraphMaxConfig `yaml:"gpu_temp"`
 	Network  GraphMaxConfig `yaml:"network"`
 }
 
@@ -147,8 +148,10 @@ func DefaultConfig() *Config {
 			},
 			EnableCompression: true,
 			Graphs: GraphConfig{
-				CPUTemp: GraphMaxConfig{MaxMode: "off", MaxValue: 100},  // 100 Celsius
-				Network: GraphMaxConfig{MaxMode: "off", MaxValue: 1000}, // 1000 Mbps
+				CPUTemp:  GraphMaxConfig{MaxMode: "off", MaxValue: 100},  // 100 Celsius
+				DiskTemp: GraphMaxConfig{MaxMode: "off", MaxValue: 100},
+				GPUTemp:  GraphMaxConfig{MaxMode: "off", MaxValue: 100},
+				Network:  GraphMaxConfig{MaxMode: "off", MaxValue: 1000}, // 1000 Mbps
 			},
 			MaxWebsocketConns:      100,
 			MaxWebsocketConnsPerIP: 5,
@@ -175,6 +178,9 @@ func Load(path string) (*Config, error) {
 	if listen := os.Getenv("KULA_LISTEN"); listen != "" {
 		cfg.Web.Listen = listen
 	}
+	if bind := os.Getenv("KULA_BIND"); bind != "" {
+		cfg.Web.Listen = bind
+	}
 	if portStr := os.Getenv("KULA_PORT"); portStr != "" {
 		if port, err := strconv.Atoi(portStr); err == nil {
 			if port > 0 && port <= 65535 {
@@ -184,6 +190,14 @@ func Load(path string) (*Config, error) {
 			}
 		} else {
 			log.Printf("Warning: invalid KULA_PORT %q: %v", portStr, err)
+		}
+	}
+	if level, set := os.LookupEnv("KULA_LOGLEVEL"); set {
+		if level != "" {
+			cfg.Web.Logging.Enabled = true
+			cfg.Web.Logging.Level = level
+		} else {
+			cfg.Web.Logging.Enabled = false
 		}
 	}
 

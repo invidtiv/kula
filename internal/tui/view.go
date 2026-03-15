@@ -99,7 +99,7 @@ func (m model) renderTabBar() string {
 
 func (m model) renderFooter() string {
 	type hint struct{ key, desc string }
-	hints := []hint{{"Tab/→", "next"}, {"←", "prev"}, {"1-6", "jump"}, {"q", "quit"}}
+	hints := []hint{{"Tab/→", "next"}, {"←", "prev"}, {"1-7", "jump"}, {"q", "quit"}}
 	sep := sFooterSep.Render("  ")
 	var parts []string
 	for _, h := range hints {
@@ -130,6 +130,8 @@ func (m model) renderContent(w, h int) string {
 		body = m.viewDisk(w, h)
 	case tabProcesses:
 		body = m.viewProcesses(w, h)
+	case tabGPU:
+		body = m.viewGPU(w, h)
 	}
 	// Clamp to available height BEFORE adding background fill,
 	// so the total View() string never exceeds m.height lines.
@@ -190,6 +192,16 @@ func (m model) buildOverviewLeft(colW int) string {
 	builder.WriteString("\n\n")
 	builder.WriteString(renderLabelVal("Processes", fmt.Sprintf("%d total  %d running  %d zombie",
 		s.Process.Total, s.Process.Running, s.Process.Zombie)))
+	
+	if len(s.GPU) > 0 {
+		builder.WriteString("\n\n")
+		builder.WriteString(sPanelTitle.Render("GPU Utilization"))
+		builder.WriteString("\n")
+		for _, gpu := range s.GPU {
+			builder.WriteString(renderMetricBarFull(padRight(gpu.Name, 10), gpu.LoadPct, bw, ""))
+			builder.WriteString("\n")
+		}
+	}
 	
 	return sPanel.Width(inner).Render(builder.String())
 }
@@ -696,6 +708,67 @@ func clampLines(s string, n int) string {
 		return s
 	}
 	return strings.Join(lines[:n], "\n")
+}
+
+// ── GPU tab ───────────────────────────────────────────────────────────────────
+
+func (m model) viewGPU(w, h int) string {
+	if m.sample == nil {
+		return centerText("Collecting data…", w, h)
+	}
+	gpus := m.sample.GPU
+	inner := w - 6
+	bw := barW(inner)
+
+	if len(gpus) == 0 {
+		return centerText("No GPUs detected", w, h)
+	}
+
+	var builder strings.Builder
+	builder.WriteString(sPanelTitleAlt.Render("◈ Graphics Processing Units"))
+	builder.WriteString("\n")
+	builder.WriteString(sDivider.Render(strings.Repeat("─", inner)))
+	builder.WriteString("\n\n")
+
+	for i, gpu := range gpus {
+		if i > 0 {
+			builder.WriteString("\n")
+			builder.WriteString(sDivider.Render(strings.Repeat("┄", inner)))
+			builder.WriteString("\n\n")
+		}
+		
+		builder.WriteString(sPanelTitle.Render(fmt.Sprintf("[%d] %s", gpu.Index, gpu.Name)))
+		builder.WriteString(sMuted.Render("  driver: "+gpu.Driver))
+		builder.WriteString("\n\n")
+
+		// Load
+		builder.WriteString(renderMetricBarFull("Load ", gpu.LoadPct, bw, ""))
+		builder.WriteString("\n")
+
+		// VRAM
+		if gpu.VRAMTotal > 0 {
+			builder.WriteString(renderMetricBarFull("VRAM ", gpu.VRAMUsedPct, bw,
+				fmtBytes(gpu.VRAMUsed)+" / "+fmtBytes(gpu.VRAMTotal)))
+			builder.WriteString("\n")
+		}
+
+		// Row for Temp and Power
+		var details []string
+		if gpu.Temperature > 0 {
+			details = append(details, renderLabelVal("Temp ", fmt.Sprintf("%.1f °C", gpu.Temperature)))
+		}
+		if gpu.PowerW > 0 {
+			details = append(details, renderLabelVal("Power", fmt.Sprintf("%.1f W", gpu.PowerW)))
+		}
+		
+		if len(details) > 0 {
+			builder.WriteString("\n")
+			builder.WriteString(strings.Join(details, "    "))
+			builder.WriteString("\n")
+		}
+	}
+
+	return sPanel.Width(inner).Render(builder.String())
 }
 
 func centerText(msg string, w, h int) string {

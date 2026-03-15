@@ -115,7 +115,7 @@ func runServe(cfg *config.Config, configPath string, osName, kernelVersion, cpuA
 	cfg.Web.Kernel = kernelVersion
 	cfg.Web.Arch = cpuArch
 	cfg.Collection.DebugLog = cfg.Web.Logging.Enabled && cfg.Web.Logging.Level == "debug"
-	coll := collector.New(cfg.Global, cfg.Collection)
+	coll := collector.New(cfg.Global, cfg.Collection, cfg.Storage.Directory)
 
 	store, err := storage.NewStore(cfg.Storage)
 	if err != nil {
@@ -182,7 +182,7 @@ func runServe(cfg *config.Config, configPath string, osName, kernelVersion, cpuA
 }
 
 func runTUI(cfg *config.Config, osName, kernelVersion, cpuArch string) {
-	coll := collector.New(cfg.Global, cfg.Collection)
+	coll := collector.New(cfg.Global, cfg.Collection, cfg.Storage.Directory)
 	if err := tui.RunHeadless(coll, cfg.TUI.RefreshRate, osName, kernelVersion, cpuArch, cfg.Global.ShowSystemInfo); err != nil {
 		log.Fatalf("TUI error: %v", err)
 	}

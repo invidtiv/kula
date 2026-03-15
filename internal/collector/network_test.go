@@ -9,7 +9,7 @@ import (
 func TestParseNetDev(t *testing.T) {
 	procPath = "testdata/proc"
 
-	c := New(config.GlobalConfig{}, config.CollectionConfig{})
+	c := New(config.GlobalConfig{}, config.CollectionConfig{}, "")
 	raw := c.parseNetDev()
 	if len(raw) != 1 {
 		t.Fatalf("expected 1 interface, got %d", len(raw))
@@ -45,7 +45,7 @@ func TestReadTCPRaw(t *testing.T) {
 func TestCollectNetwork(t *testing.T) {
 	procPath = "testdata/proc"
 
-	c := New(config.GlobalConfig{}, config.CollectionConfig{})
+	c := New(config.GlobalConfig{}, config.CollectionConfig{}, "")
 	// First collect sets baseline
 	stats := c.collectNetwork(1.0)
 	if len(stats.Interfaces) != 1 {
@@ -77,7 +77,7 @@ func TestParseNetDevFiltering(t *testing.T) {
 	procPath = "testdata/proc"
 
 	t.Run("auto-discovery skips virtual interfaces", func(t *testing.T) {
-		c := New(config.GlobalConfig{}, config.CollectionConfig{})
+		c := New(config.GlobalConfig{}, config.CollectionConfig{}, "")
 		raw := c.parseNetDev()
 		// Only eth0 should survive; lo, veth0, docker0, br-abc, virbr0, tun0, tap0 must be skipped
 		if len(raw) != 1 {
@@ -96,7 +96,7 @@ func TestParseNetDevFiltering(t *testing.T) {
 	t.Run("explicit config allows any interface including virtual", func(t *testing.T) {
 		c := New(config.GlobalConfig{}, config.CollectionConfig{
 			Interfaces: []string{"eth0", "lo"},
-		})
+		}, "")
 		raw := c.parseNetDev()
 		if len(raw) != 2 {
 			t.Errorf("expected 2 interfaces (eth0, lo), got %d: %v", len(raw), mapKeys(raw))

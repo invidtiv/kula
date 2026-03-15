@@ -390,7 +390,7 @@ func TestUpdate_TabBackward(t *testing.T) {
 
 func TestUpdate_TabWrapsForward(t *testing.T) {
 	m := newTestModel(120, 40)
-	m.activeTab = tabProcesses
+	m.activeTab = tabGPU
 
 	next, _ := m.Update(tea.KeyMsg{Type: tea.KeyTab})
 	if next.(model).activeTab != tabOverview {
@@ -403,8 +403,8 @@ func TestUpdate_TabWrapsBackward(t *testing.T) {
 	m.activeTab = tabOverview
 
 	prev, _ := m.Update(tea.KeyMsg{Type: tea.KeyShiftTab})
-	if prev.(model).activeTab != tabProcesses {
-		t.Errorf("ShiftTab wrap → expected tabProcesses, got %d", prev.(model).activeTab)
+	if prev.(model).activeTab != tabGPU {
+		t.Errorf("ShiftTab wrap → expected tabGPU, got %d", prev.(model).activeTab)
 	}
 }
 
@@ -419,6 +419,7 @@ func TestUpdate_DirectJump(t *testing.T) {
 		{'4', tabNetwork},
 		{'5', tabDisk},
 		{'6', tabProcesses},
+		{'7', tabGPU},
 	}
 	for _, tt := range tests {
 		m := newTestModel(120, 40)
@@ -670,6 +671,20 @@ func TestView_ProcessesTabContent(t *testing.T) {
 	for _, want := range []string{"Processes", "Running", "Sleeping", "Kula"} {
 		if !strings.Contains(view, want) {
 			t.Errorf("Processes tab missing %q", want)
+		}
+	}
+}
+
+func TestView_GPUTabContent(t *testing.T) {
+	m := newTestModel(120, 40)
+	m.activeTab = tabGPU
+	m.sample.GPU = []collector.GPUStats{
+		{Name: "NVIDIA RTX 4090", Driver: "nvidia", LoadPct: 45.0, Temperature: 55.0},
+	}
+	view := m.View()
+	for _, want := range []string{"NVIDIA", "driver", "Load", "Temp"} {
+		if !strings.Contains(view, want) {
+			t.Errorf("GPU tab missing %q", want)
 		}
 	}
 }

@@ -17,7 +17,7 @@ func TestWebSocketConnectionLimits(t *testing.T) {
 		MaxWebsocketConns:      3,
 		MaxWebsocketConnsPerIP: 2,
 	}
-	c := collector.New(config.GlobalConfig{}, config.CollectionConfig{})
+	c := collector.New(config.GlobalConfig{}, config.CollectionConfig{}, "")
 	s := NewServer(cfg, config.GlobalConfig{}, c, nil, t.TempDir())
 	
 	// Start hub to process registration/unregistration

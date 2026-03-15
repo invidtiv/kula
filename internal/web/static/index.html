@@ -266,6 +266,28 @@
                 <div class="chart-body"><canvas id="chart-disk-space"></canvas></div>
             </div>
 
+            <div class="chart-card hidden" id="card-gpu-load">
+                <div class="chart-header">
+                    <h3>GPU Load</h3>
+                    <span class="chart-subtitle" id="gpuload-subtitle"></span>
+                    <div class="chart-header-right">
+                        <select id="gpuload-selector" class="chart-selector hidden"></select>
+                    </div>
+                </div>
+                <div class="chart-body"><canvas id="chart-gpu-load"></canvas></div>
+            </div>
+
+            <div class="chart-card hidden" id="card-vram">
+                <div class="chart-header">
+                    <h3>VRAM Usage</h3>
+                    <span class="chart-subtitle" id="vram-subtitle"></span>
+                    <div class="chart-header-right">
+                        <select id="vram-selector" class="chart-selector hidden"></select>
+                    </div>
+                </div>
+                <div class="chart-body"><canvas id="chart-vram"></canvas></div>
+            </div>
+
             <div class="chart-card" id="card-processes">
                 <div class="chart-header">
                     <h3>Processes</h3>
@@ -310,6 +332,17 @@
                     </div>
                 </div>
                 <div class="chart-body"><canvas id="chart-disk-temp"></canvas></div>
+            </div>
+
+            <div class="chart-card hidden" id="card-gpu-temp">
+                <div class="chart-header">
+                    <h3>GPU Temperature</h3>
+                    <span class="chart-subtitle" id="gputemp-subtitle"></span>
+                    <div class="chart-header-right">
+                        <select id="gputemp-selector" class="chart-selector hidden"></select>
+                    </div>
+                </div>
+                <div class="chart-body"><canvas id="chart-gpu-temp"></canvas></div>
             </div>
         </section>
 

@@ -8,7 +8,7 @@ import (
 func TestParseProcStat(t *testing.T) {
 	procPath = "testdata/proc"
 
-	c := New(config.GlobalConfig{}, config.CollectionConfig{})
+	c := New(config.GlobalConfig{}, config.CollectionConfig{}, "")
 	raw := c.parseProcStat()
 	if len(raw) != 3 {
 		t.Fatalf("expected 3 CPU records, got %d", len(raw))
@@ -25,7 +25,7 @@ func TestParseProcStat(t *testing.T) {
 func TestCollectLoadAvg(t *testing.T) {
 	procPath = "testdata/proc"
 
-	c := New(config.GlobalConfig{}, config.CollectionConfig{})
+	c := New(config.GlobalConfig{}, config.CollectionConfig{}, "")
 	load := c.collectLoadAvg()
 	if load.Load1 != 1.50 || load.Load5 != 1.25 || load.Load15 != 1.10 {
 		t.Errorf("unexpected load avg: %+v", load)
@@ -38,7 +38,7 @@ func TestCollectLoadAvg(t *testing.T) {
 func TestCollectCPU(t *testing.T) {
 	procPath = "testdata/proc"
 
-	c := New(config.GlobalConfig{}, config.CollectionConfig{})
+	c := New(config.GlobalConfig{}, config.CollectionConfig{}, "")
 	// First collect sets baseline
 	stats := c.collectCPU(1.0)
 	if stats.NumCores != 2 {
@@ -57,7 +57,7 @@ func TestCollectCPUTemp(t *testing.T) {
 	// Reset the package-level cache so discovery runs
 	sysTempSensors = nil
 
-	c := New(config.GlobalConfig{}, config.CollectionConfig{})
+	c := New(config.GlobalConfig{}, config.CollectionConfig{}, "")
 	temp, _ := c.collectCPUTemperature()
 	// testdata/sys/class/hwmon/hwmon0/temp1_input contains "45123", so expect 45.12
 	if temp != 45.12 {

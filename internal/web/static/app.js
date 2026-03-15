@@ -42,14 +42,18 @@
         cpuTempSensorNames: [],
         diskTempSensorNames: [],
         currentAggregation: localStorage.getItem('kula_aggregation') || 'avg',
-        selectedNet: localStorage.getItem('kula_sel_net') || null,
-        selectedDiskIo: localStorage.getItem('kula_sel_diskio') || null,
-        selectedDiskTemp: localStorage.getItem('kula_sel_disktemp') || null,
-        selectedDiskSpace: localStorage.getItem('kula_sel_diskspace') || null,
         netOptions: [],
         diskIoOptions: [],
         diskTempOptions: [],
         diskSpaceOptions: [],
+        gpuLoadOptions: [],
+        selectedNet: localStorage.getItem('kula_sel_net') || null,
+        selectedDiskIo: localStorage.getItem('kula_sel_diskio') || null,
+        selectedDiskTemp: localStorage.getItem('kula_sel_disktemp') || null,
+        selectedDiskSpace: localStorage.getItem('kula_sel_diskspace') || null,
+        selectedGpuLoad: localStorage.getItem('kula_sel_gpuload') || null,
+        selectedVram: localStorage.getItem('kula_sel_vram') || null,
+        selectedGpuTemp: localStorage.getItem('kula_sel_gputemp') || null,
         configMax: {}, // loaded from server /api/config
         lastHistoricalTs: null,
     };
@@ -412,6 +416,35 @@
             { label: 'Entropy', borderColor: colors.green, backgroundColor: colors.greenAlpha, fill: true, data: [] },
         ]);
 
+        // GPU Load
+        state.charts.gpuload = createTimeSeriesChart('chart-gpu-load', [
+            { label: 'Load %', borderColor: colors.green, backgroundColor: colors.greenAlpha, fill: true, data: [] },
+            { label: 'Power W', borderColor: colors.orange, data: [], fill: false, yAxisID: 'y1' },
+        ], { max: 100, ticks: { callback: v => v + '%' } });
+        if (state.charts.gpuload) {
+            state.charts.gpuload.options.scales.y1 = {
+                position: 'right',
+                beginAtZero: true,
+                grid: { display: false },
+                ticks: { callback: v => v.toFixed(1) + ' W' },
+            };
+            state.charts.gpuload.update('none');
+        }
+
+        // VRAM
+        state.charts.vram = createTimeSeriesChart('chart-vram', [
+            { label: 'VRAM Used', borderColor: colors.purple, backgroundColor: colors.purpleAlpha, fill: true, data: [] },
+        ], { ticks: { callback: v => formatBytesShort(v) } }, {
+            tooltip: { callbacks: { label: ctx => ctx.dataset.label + ': ' + formatBytesShort(ctx.parsed.y) } }
+        });
+
+        // GPU Temperature
+        let gpuTempMax = getChartMaxBound('gpu_temp');
+        let gpuTempYConfig = { max: gpuTempMax, ticks: { callback: v => v.toFixed(1) + '°C' } };
+        state.charts.gputemp = createTimeSeriesChart('chart-gpu-temp', [
+            { label: 'Temperature', borderColor: colors.red, backgroundColor: colors.redAlpha, fill: true, data: [] },
+        ], gpuTempYConfig);
+
         // Self monitoring
         state.charts.self = createTimeSeriesChart('chart-self', [
             { label: 'CPU %', borderColor: colors.cyan, data: [], fill: false, yAxisID: 'y' },
@@ -718,6 +751,33 @@
             state.charts.self.data.datasets[0].data.push(point(s.self.cpu_pct));
             state.charts.self.data.datasets[1].data.push(point(s.self.mem_rss || 0));
         }
+
+        // GPU Metrics
+        if (s.gpu && s.gpu.length > 0) {
+            const g = s.gpu.find(g => g.name === state.selectedGpuLoad) || s.gpu[0];
+            if (state.charts.gpuload) {
+                document.getElementById('card-gpu-load')?.classList.remove('hidden');
+                state.charts.gpuload.data.datasets[0].data.push(point(g.load_pct || 0));
+                state.charts.gpuload.data.datasets[1].data.push(point(g.power_w || 0));
+            }
+            if (state.charts.vram) {
+                document.getElementById('card-vram')?.classList.remove('hidden');
+                state.charts.vram.data.datasets[0].data.push(point(g.vram_used || 0));
+                state.charts.vram.options.scales.y.max = g.vram_total > 0 ? g.vram_total : undefined;
+            }
+            if (state.charts.gputemp && g.temp > 0) {
+                document.getElementById('card-gpu-temp')?.classList.remove('hidden');
+                document.getElementById('thermals-title')?.classList.remove('hidden');
+                document.getElementById('thermals-grid')?.classList.remove('hidden');
+                state.charts.gputemp.data.datasets[0].data.push(point(g.temp));
+            } else {
+                document.getElementById('card-gpu-temp')?.classList.add('hidden');
+            }
+        } else {
+            document.getElementById('card-gpu-load')?.classList.add('hidden');
+            document.getElementById('card-vram')?.classList.add('hidden');
+            document.getElementById('card-gpu-temp')?.classList.add('hidden');
+        }
     }
 
     // Batch-update all charts at once
@@ -890,6 +950,44 @@
                         redrawChartsFromBuffer();
                     };
                 }
+            }
+        }
+
+        if (s.gpu && s.gpu.length > 0) {
+            const gpus = s.gpu.map(g => g.name).sort();
+            if (gpus.join(',') !== state.gpuLoadOptions.join(',')) {
+                state.gpuLoadOptions = gpus;
+                const selLoad = el('gpuload-selector');
+                const selVram = el('vram-selector');
+                const selTemp = el('gputemp-selector');
+
+                if (!state.selectedGpuLoad || !gpus.includes(state.selectedGpuLoad)) {
+                    state.selectedGpuLoad = gpus[0];
+                    localStorage.setItem('kula_sel_gpuload', state.selectedGpuLoad);
+                }
+
+                [selLoad, selVram, selTemp].forEach(sel => {
+                    if (sel) {
+                        sel.innerHTML = '';
+                        gpus.forEach(g => {
+                            const opt = document.createElement('option');
+                            opt.value = g;
+                            opt.textContent = g;
+                            sel.appendChild(opt);
+                        });
+                        sel.value = state.selectedGpuLoad;
+                        sel.classList.toggle('no-arrow', gpus.length <= 1);
+                        sel.classList.remove('hidden');
+                        sel.onchange = (e) => {
+                            state.selectedGpuLoad = e.target.value;
+                            if (selLoad) selLoad.value = state.selectedGpuLoad;
+                            if (selVram) selVram.value = state.selectedGpuLoad;
+                            if (selTemp) selTemp.value = state.selectedGpuLoad;
+                            localStorage.setItem('kula_sel_gpuload', state.selectedGpuLoad);
+                            redrawChartsFromBuffer();
+                        };
+                    }
+                });
             }
         }
     }
@@ -1234,9 +1332,9 @@
         const el = (id, text) => { const e = document.getElementById(id); if (e) e.textContent = text; };
 
         if (s.cpu?.total) {
-            el('cpu-subtitle', `usr:${s.cpu.total.user.toFixed(1)}% sys:${s.cpu.total.system.toFixed(1)}% io:${s.cpu.total.iowait.toFixed(1)}% ${s.cpu.num_cores || 0} cores`);
+            el('cpu-subtitle', `usr:${(s.cpu.total.user || 0).toFixed(1)}% sys:${(s.cpu.total.system || 0).toFixed(1)}% io:${(s.cpu.total.iowait || 0).toFixed(1)}% ${s.cpu.num_cores || 0} cores`);
         }
-        if (s.lavg) el('lavg-subtitle', `${s.lavg.load1.toFixed(2)} / ${s.lavg.load5.toFixed(2)} / ${s.lavg.load15.toFixed(2)}`);
+        if (s.lavg) el('lavg-subtitle', `${(s.lavg.load1 || 0).toFixed(2)} / ${(s.lavg.load5 || 0).toFixed(2)} / ${(s.lavg.load15 || 0).toFixed(2)}`);
         // Memory — with % appended
         if (s.mem) {
             const memPct = s.mem.used_pct !== undefined ? s.mem.used_pct.toFixed(1) : '0.0';
@@ -1313,8 +1411,21 @@
                 el('diskspace-subtitle', `${formatBytesShort(used)} / ${formatBytesShort(total)} (${pct.toFixed(1)}%)`);
             }
         }
-        if (s.proc) el('proc-subtitle', `${s.proc.total} total, ${s.proc.running} running`);
-        if (s.self) el('self-subtitle', `${s.self.cpu_pct.toFixed(1)}% cpu, ${formatBytesShort(s.self.mem_rss)} rss, ${s.self.fds || 0} fds`);
+        if (s.proc) el('proc-subtitle', `${s.proc.total || 0} total, ${s.proc.running || 0} running`);
+        if (s.self) el('self-subtitle', `${(s.self.cpu_pct || 0).toFixed(1)}% cpu, ${formatBytesShort(s.self.mem_rss || 0)} rss, ${s.self.fds || 0} fds`);
+
+        if (s.gpu && s.gpu.length > 0) {
+            const g = s.gpu.find(g => g.name === state.selectedGpuLoad) || s.gpu[0];
+            if (g) {
+                el('gpuload-subtitle', `${(g.load_pct || 0).toFixed(1)}% load, ${(g.power_w || 0).toFixed(1)}W`);
+                if (g.vram_total > 0) {
+                    el('vram-subtitle', `${formatBytesShort(g.vram_used || 0)} / ${formatBytesShort(g.vram_total)} (${(g.vram_pct || 0).toFixed(1)}%)`);
+                }
+                if (g.temp > 0) {
+                    el('gputemp-subtitle', `${(g.temp || 0).toFixed(1)}°C`);
+                }
+            }
+        }
     }
 
     // ---- WebSocket ----
@@ -2036,6 +2147,7 @@
             let graphId = null;
             if (card.id === 'card-cpu-temp') graphId = 'cpu_temp';
             else if (card.id === 'card-disk-temp') graphId = 'disk_temp';
+            else if (card.id === 'card-gpu-temp') graphId = 'gpu_temp';
             else if (card.id === 'card-network') graphId = 'network';
 
             if (graphId) {

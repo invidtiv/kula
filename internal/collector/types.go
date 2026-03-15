@@ -15,6 +15,7 @@ type Sample struct {
 	System  SystemStats  `json:"sys"`
 	Process ProcessStats `json:"proc"`
 	Self    SelfStats    `json:"self"`
+	GPU     []GPUStats   `json:"gpu,omitempty"`
 }
 
 // CPUStats holds per-core and total CPU usage percentages.
@@ -156,4 +157,16 @@ type SelfStats struct {
 	CPUPercent float64 `json:"cpu_pct"`
 	MemRSS     uint64  `json:"mem_rss"`
 	FDs        int     `json:"fds"`
+}
+
+type GPUStats struct {
+	Index       int     `json:"index"`
+	Name        string  `json:"name"`
+	Driver      string  `json:"driver"`
+	Temperature float64 `json:"temp,omitempty"`
+	VRAMUsed    uint64  `json:"vram_used,omitempty"`
+	VRAMTotal   uint64  `json:"vram_total,omitempty"`
+	VRAMUsedPct float64 `json:"vram_pct,omitempty"`
+	LoadPct     float64 `json:"load_pct,omitempty"`
+	PowerW      float64 `json:"power_w,omitempty"`
 }

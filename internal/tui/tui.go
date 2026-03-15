@@ -59,11 +59,12 @@ const (
 	tabNetwork
 	tabDisk
 	tabProcesses
+	tabGPU
 	numTabs
 )
 
 var tabNames = [numTabs]string{
-	"Overview", "CPU", "Memory", "Network", "Disk", "Processes",
+	"Overview", "CPU", "Memory", "Network", "Disk", "Processes", "GPU",
 }
 
 type tickMsg time.Time
@@ -204,6 +205,10 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		case "6":
 			if tabProcesses < numTabs {
 				m.activeTab = tabProcesses
+			}
+		case "7":
+			if tabGPU < numTabs {
+				m.activeTab = tabGPU
 			}
 		}
 	}

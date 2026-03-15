@@ -76,10 +76,6 @@ func Enforce(configPath string, storageDir string, webPort int) error {
 
 	// Apply Landlock restrictions using V5 with BestEffort.
 	// V5 (kernel 6.7+) includes: filesystem + networking + ioctl on devices.
-	// BestEffort() degrades gracefully:
-	//   - On V4 kernels: full support minus device ioctl
-	//   - On V1-V3 kernels: filesystem only (no network restrictions)
-	//   - On pre-5.13 kernels: no restrictions (succeeds silently)
 	err = landlock.V5.BestEffort().Restrict(allRules...)
 	if err != nil {
 		return fmt.Errorf("sandbox: enforcing landlock: %w", err)

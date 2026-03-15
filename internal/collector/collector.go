@@ -25,16 +25,21 @@ type Collector struct {
 	prevDisk  map[string]diskRaw
 	prevSelf  selfRaw
 	prevTCP   tcpRaw
+	prevEnergy map[string]uint64 // for Intel energy derivation
+	gpus      []GPUInfo
+	hasNvidiaSmi bool
+	storageDir string
 	prevTime  time.Time
 	debugDone bool // set after the first Collect(); suppresses repeated debug logs
 }
 
-func New(cfg config.GlobalConfig, collCfg config.CollectionConfig) *Collector {
+func New(cfg config.GlobalConfig, collCfg config.CollectionConfig, storageDir string) *Collector {
 	return &Collector{
-		cfg:      cfg,
-		collCfg:  collCfg,
-		prevNet:  make(map[string]netRaw),
-		prevDisk: make(map[string]diskRaw),
+		cfg:        cfg,
+		collCfg:    collCfg,
+		storageDir: storageDir,
+		prevNet:    make(map[string]netRaw),
+		prevDisk:   make(map[string]diskRaw),
 	}
 }
 
@@ -74,6 +79,7 @@ func (c *Collector) Collect() *Sample {
 	s.System = c.collectSystem()
 	s.Process = collectProcesses()
 	s.Self = c.collectSelf(elapsed)
+	s.GPU = c.collectGPUs(elapsed)
 
 	c.mu.Lock()
 	c.latest = s
