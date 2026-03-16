@@ -267,22 +267,34 @@ function addSampleToCharts(item, ts) {
     // GPU Metrics
     if (s.gpu && s.gpu.length > 0) {
         const g = s.gpu.find(g => g.name === state.selectedGpuLoad) || s.gpu[0];
-        if (state.charts.gpuload) {
-            document.getElementById('card-gpu-load')?.classList.remove('hidden');
-            state.charts.gpuload.data.datasets[0].data.push(point(g.load_pct || 0));
-            state.charts.gpuload.data.datasets[1].data.push(point(g.power_w || 0));
-        }
-        if (state.charts.vram) {
-            document.getElementById('card-vram')?.classList.remove('hidden');
-            state.charts.vram.data.datasets[0].data.push(point(g.vram_used || 0));
-            state.charts.vram.options.scales.y.max = g.vram_total > 0 ? g.vram_total : undefined;
-        }
-        if (state.charts.gputemp && g.temp > 0) {
-            document.getElementById('card-gpu-temp')?.classList.remove('hidden');
-            document.getElementById('thermals-title')?.classList.remove('hidden');
-            document.getElementById('thermals-grid')?.classList.remove('hidden');
-            state.charts.gputemp.data.datasets[0].data.push(point(g.temp));
+        const hasAnyGpuMetric = (g.load_pct > 0 || g.power_w > 0 || g.vram_total > 0 || g.temp > 0);
+
+        if (hasAnyGpuMetric) {
+            if (state.charts.gpuload && (g.load_pct > 0 || g.power_w > 0)) {
+                document.getElementById('card-gpu-load')?.classList.remove('hidden');
+                state.charts.gpuload.data.datasets[0].data.push(point(g.load_pct || 0));
+                state.charts.gpuload.data.datasets[1].data.push(point(g.power_w || 0));
+            } else {
+                document.getElementById('card-gpu-load')?.classList.add('hidden');
+            }
+            if (state.charts.vram && g.vram_total > 0) {
+                document.getElementById('card-vram')?.classList.remove('hidden');
+                state.charts.vram.data.datasets[0].data.push(point(g.vram_used || 0));
+                state.charts.vram.options.scales.y.max = g.vram_total > 0 ? g.vram_total : undefined;
+            } else {
+                document.getElementById('card-vram')?.classList.add('hidden');
+            }
+            if (state.charts.gputemp && g.temp > 0) {
+                document.getElementById('card-gpu-temp')?.classList.remove('hidden');
+                document.getElementById('thermals-title')?.classList.remove('hidden');
+                document.getElementById('thermals-grid')?.classList.remove('hidden');
+                state.charts.gputemp.data.datasets[0].data.push(point(g.temp));
+            } else {
+                document.getElementById('card-gpu-temp')?.classList.add('hidden');
+            }
         } else {
+            document.getElementById('card-gpu-load')?.classList.add('hidden');
+            document.getElementById('card-vram')?.classList.add('hidden');
             document.getElementById('card-gpu-temp')?.classList.add('hidden');
         }
     } else {

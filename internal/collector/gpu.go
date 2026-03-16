@@ -54,6 +54,17 @@ func (c *Collector) discoverGPUs() {
 			continue
 		}
 		driver := filepath.Base(driverLink)
+		// Skip drivers that are known virtual/display-only with no monitoring value
+		skipDrivers := map[string]bool{
+			"virtio-pci": true,
+			"bochs":      true,
+			"simpledrm":  true,
+			"vboxvideo":  true,
+		}
+		if skipDrivers[driver] {
+			c.debugf("gpu: skipping virtual/headless GPU %s (driver: %s)", name, driver)
+			continue
+		}
 
 		info := GPUInfo{
 			Index:   len(c.gpus),
@@ -159,7 +170,12 @@ func (c *Collector) collectGPUs(elapsed float64) []GPUStats {
 			c.collectSysfsGPUStats(info, &s, elapsed)
 		}
 
-		stats = append(stats, s)
+		// Only append if we have at least some metrics
+		if s.Temperature > 0 || s.LoadPct > 0 || s.VRAMTotal > 0 || s.PowerW > 0 {
+			stats = append(stats, s)
+		} else {
+			c.debugf("gpu[%d]: no metrics available, skipping", info.Index)
+		}
 	}
 	return stats
 }
