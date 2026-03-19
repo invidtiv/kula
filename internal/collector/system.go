@@ -25,7 +25,7 @@ func (c *Collector) collectSystem() SystemStats {
 		fields := strings.Fields(string(data))
 		if len(fields) >= 1 {
 			s.Uptime = c.parseFloat(fields[0], 64, "system.uptime")
-			s.UptimeHuman = formatUptime(s.Uptime)
+			s.UptimeHuman = FormatUptime(s.Uptime)
 		}
 	}
 

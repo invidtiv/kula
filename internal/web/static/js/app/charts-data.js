@@ -372,13 +372,48 @@ function clearAllChartData() {
     });
 }
 
+// Debounce timer for zoom-triggered history fetches.
+let _zoomFetchTimer = null;
+
+// tryZoomFromBuffer attempts to satisfy a zoom request from the in-memory
+// data buffer, avoiding a network round-trip when the buffer already covers
+// the requested window. Returns true if the redraw succeeded.
+function tryZoomFromBuffer(fromDate, toDate) {
+    if (!state.dataBuffer || state.dataBuffer.length === 0) return false;
+
+    const fromMs = fromDate.getTime();
+    const toMs   = toDate.getTime();
+
+    // Determine the time span of the current buffer.
+    const first = state.dataBuffer[0];
+    const last  = state.dataBuffer[state.dataBuffer.length - 1];
+    const bufStart = new Date(first.ts || first.data?.ts).getTime();
+    const bufEnd   = new Date(last.ts  || last.data?.ts).getTime();
+
+    if (isNaN(bufStart) || isNaN(bufEnd)) return false;
+    if (bufStart > fromMs || bufEnd < toMs) return false; // buffer doesn't cover window
+
+    // Buffer covers the window — redraw directly from it.
+    clearAllChartData();
+    const visible = state.dataBuffer.filter(item => {
+        const t = new Date(item.ts || item.data?.ts).getTime();
+        return !isNaN(t) && t >= fromMs && t <= toMs;
+    });
+    visible.forEach(item => {
+        const ts = new Date(item.ts || item.data?.ts);
+        addSampleToCharts(item, ts);
+    });
+    updateAllCharts();
+    return true;
+}
+
 function syncZoom(sourceChart) {
     const { min, max } = sourceChart.scales.x;
 
     // Update the display to show the zoomed timeframe explicitly
     if (min && max) {
         const fmt = d => d.toLocaleString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', second: '2-digit' });
-        document.getElementById('time-range-display').textContent = `${fmt(new Date(min))} → ${fmt(new Date(max))} (Zoomed)`;
+        document.getElementById('time-range-display').textContent = `${fmt(new Date(min))} \u2192 ${fmt(new Date(max))} (Zoomed)`;
     }
 
     Object.values(state.charts).forEach(chart => {
@@ -389,11 +424,21 @@ function syncZoom(sourceChart) {
     });
 
     // If current data is coarser than 1s and the zoomed window fits within
-    // 1-hour of 1s samples, re-fetch at higher resolution for this window.
+    // 1-hour of 1s samples, attempt a higher-resolution fetch.
     if (min && max && state.currentResolution !== '1s') {
         const windowSec = (max - min) / 1000;
         if (windowSec <= 3600) {
-            fetchZoomedHistory(new Date(min), new Date(max));
+            const fromDate = new Date(min);
+            const toDate   = new Date(max);
+            // First, try to serve directly from the in-memory buffer.
+            if (!tryZoomFromBuffer(fromDate, toDate)) {
+                // Buffer doesn't cover the window — debounce the network fetch
+                // so rapid scroll/pinch events produce only one request.
+                clearTimeout(_zoomFetchTimer);
+                _zoomFetchTimer = setTimeout(() => {
+                    fetchZoomedHistory(fromDate, toDate);
+                }, 150);
+            }
         }
     }
 }

@@ -216,6 +216,11 @@ func (s *Server) Start() error {
 	mux.Handle("/api/", s.auth.AuthMiddleware(loggedApiMux))
 	mux.Handle("/ws", wsHandler)
 
+	// Prometheus metrics endpoint — intentionally unauthenticated so scrapers
+	// can be configured without credentials. Still passes through logging and
+	// security headers via the outer middleware chain.
+	mux.HandleFunc("/metrics", s.handleMetrics)
+
 	// Templated HTML files
 	mux.HandleFunc("/", s.handleIndex)
 	mux.HandleFunc("/index.html", s.handleIndex)

@@ -32,6 +32,10 @@ type Store struct {
 	configs []config.TierConfig
 	dir     string
 
+	// Cached aggregation ratios (computed once at NewStore).
+	ratio1 int // how many tier-0 samples make one tier-1 record
+	ratio2 int // how many tier-1 samples make one tier-2 record
+
 	// Aggregation state
 	tier1Count int
 	tier1Buf   []*collector.Sample
@@ -42,6 +46,19 @@ type Store struct {
 	// This makes QueryLatest O(1) (a guarded pointer read) instead of
 	// O(n) (a full disk scan of the tier file).
 	latestCache *AggregatedSample
+
+	// queryCache is a short-lived in-process cache for QueryRangeWithMeta.
+	// It deduplicates identical or concurrent API calls within one tier-0
+	// resolution window. Cleared on every WriteSample call.
+	queryCacheMu sync.Mutex
+	queryCache   map[queryCacheKey]*HistoryResult
+}
+
+// queryCacheKey identifies a unique query rounded to tier resolution.
+type queryCacheKey struct {
+	fromNano     int64
+	toNano       int64
+	targetPoints int
 }
 
 func NewStore(cfg config.StorageConfig) (*Store, error) {
@@ -55,8 +72,24 @@ func NewStore(cfg config.StorageConfig) (*Store, error) {
 	}
 
 	s := &Store{
-		dir:     absDir,
-		configs: cfg.Tiers,
+		dir:        absDir,
+		configs:    cfg.Tiers,
+		queryCache: make(map[queryCacheKey]*HistoryResult),
+	}
+
+	// Compute aggregation ratios once — used on every 1 Hz WriteSample tick.
+	if len(cfg.Tiers) > 1 && cfg.Tiers[0].Resolution > 0 {
+		s.ratio1 = int(cfg.Tiers[1].Resolution / cfg.Tiers[0].Resolution)
+	}
+	if s.ratio1 < 0 {
+		s.ratio1 = 0
+	}
+
+	if len(cfg.Tiers) > 2 && cfg.Tiers[1].Resolution > 0 {
+		s.ratio2 = int(cfg.Tiers[2].Resolution / cfg.Tiers[1].Resolution)
+	}
+	if s.ratio2 < 0 {
+		s.ratio2 = 0
 	}
 
 	for i, tc := range cfg.Tiers {
@@ -104,26 +137,9 @@ func (s *Store) reconstructAggregationState() {
 		return
 	}
 
-	// Configure aggregation ratios based on resolutions
-	ratio1 := 60
-	if len(s.configs) > 1 && s.configs[0].Resolution > 0 {
-		ratio1 = int(s.configs[1].Resolution / s.configs[0].Resolution)
-	}
-	if ratio1 <= 0 {
-		ratio1 = 1
-	}
-
-	ratio2 := 5
-	if len(s.configs) > 2 && s.configs[1].Resolution > 0 {
-		ratio2 = int(s.configs[2].Resolution / s.configs[1].Resolution)
-	}
-	if ratio2 <= 0 {
-		ratio2 = 1
-	}
-
-	// Reconstruct Tier 1 state
+	// Reconstruct Tier 1 state using the cached ratio.
 	t1Newest := s.tiers[1].NewestTimestamp()
-	t0Samples, err := s.tiers[0].ReadLatest(ratio1)
+	t0Samples, err := s.tiers[0].ReadLatest(s.ratio1)
 	if err == nil {
 		var pending []*collector.Sample
 		for _, as := range t0Samples {
@@ -137,10 +153,10 @@ func (s *Store) reconstructAggregationState() {
 		s.tier1Count = len(pending)
 	}
 
-	// Reconstruct Tier 2 state
+	// Reconstruct Tier 2 state.
 	if len(s.tiers) > 2 {
 		t2Newest := s.tiers[2].NewestTimestamp()
-		t1Samples, err := s.tiers[1].ReadLatest(ratio2)
+		t1Samples, err := s.tiers[1].ReadLatest(s.ratio2)
 		if err == nil {
 			var pending []*AggregatedSample
 			for _, as := range t1Samples {
@@ -182,46 +198,39 @@ func (s *Store) WriteSample(sample *collector.Sample) error {
 		s.latestCache = as
 	}
 
-	// Aggregate for tier 2 (every 60 samples = 1 minute)
-	s.tier1Buf = append(s.tier1Buf, sample)
-	s.tier1Count++
+	// Aggregate for tier 1 (every ratio1 samples)
+	if s.ratio1 > 0 && len(s.tiers) > 1 {
+		s.tier1Buf = append(s.tier1Buf, sample)
+		s.tier1Count++
 
-	// Configure aggregation ratios based on resolutions
-	ratio1 := 60
-	if len(s.configs) > 1 && s.configs[0].Resolution > 0 {
-		ratio1 = int(s.configs[1].Resolution / s.configs[0].Resolution)
-	}
-	if ratio1 <= 0 {
-		ratio1 = 1
-	}
-
-	ratio2 := 5
-	if len(s.configs) > 2 && s.configs[1].Resolution > 0 {
-		ratio2 = int(s.configs[2].Resolution / s.configs[1].Resolution)
-	}
-	if ratio2 <= 0 {
-		ratio2 = 1
-	}
-
-	if s.tier1Count >= ratio1 && len(s.tiers) > 1 {
-		agg := s.aggregateSamples(s.tier1Buf, s.configs[1].Resolution)
-		if err := s.tiers[1].Write(agg); err != nil {
-			return fmt.Errorf("writing tier 1: %w", err)
-		}
-		s.tier2Buf = append(s.tier2Buf, agg)
-		s.tier2Count++
-		s.tier1Buf = nil
-		s.tier1Count = 0
-
-		if s.tier2Count >= ratio2 && len(s.tiers) > 2 {
-			agg3 := s.aggregateAggregated(s.tier2Buf, s.configs[2].Resolution)
-			if err := s.tiers[2].Write(agg3); err != nil {
-				return fmt.Errorf("writing tier 2: %w", err)
+		if s.tier1Count >= s.ratio1 {
+			agg := s.aggregateSamples(s.tier1Buf, s.configs[1].Resolution)
+			if err := s.tiers[1].Write(agg); err != nil {
+				return fmt.Errorf("writing tier 1: %w", err)
 			}
-			s.tier2Buf = nil
-			s.tier2Count = 0
+			s.tier1Buf = nil
+			s.tier1Count = 0
+
+			if s.ratio2 > 0 && len(s.tiers) > 2 {
+				s.tier2Buf = append(s.tier2Buf, agg)
+				s.tier2Count++
+
+				if s.tier2Count >= s.ratio2 {
+					agg3 := s.aggregateAggregated(s.tier2Buf, s.configs[2].Resolution)
+					if err := s.tiers[2].Write(agg3); err != nil {
+						return fmt.Errorf("writing tier 2: %w", err)
+					}
+					s.tier2Buf = nil
+					s.tier2Count = 0
+				}
+			}
 		}
 	}
+
+	// Invalidate the query cache so the next fetch sees the new sample.
+	s.queryCacheMu.Lock()
+	s.queryCache = make(map[queryCacheKey]*HistoryResult)
+	s.queryCacheMu.Unlock()
 
 	return nil
 }
@@ -243,9 +252,10 @@ func (s *Store) QueryRange(from, to time.Time) ([]*AggregatedSample, error) {
 }
 
 // QueryRangeWithMeta returns samples with tier metadata.
-// It tries the highest-resolution tier first and falls back to lower tiers
-// when the estimated sample count would exceed maxSamples, or when the tier
-// doesn't have data covering the requested range.
+// It returns the finest-resolution tier that (a) has data covering the window
+// and (b) would not produce more than targetPoints*2 samples before downsampling.
+// Results are cached for the duration of one tier-0 resolve cycle to serve
+// concurrent or repeated API calls without extra disk I/O.
 func (s *Store) QueryRangeWithMeta(from, to time.Time, targetPoints int) (*HistoryResult, error) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
@@ -262,6 +272,20 @@ func (s *Store) QueryRangeWithMeta(from, to time.Time, targetPoints int) (*Histo
 		targetPoints = maxScreenPoints
 	}
 
+	// --- Query cache lookup (lock-free read under store RLock) ---
+	// Round from/to down to nearest second to unify slightly-different wall-clock calls.
+	cacheKey := queryCacheKey{
+		fromNano:     from.Truncate(time.Second).UnixNano(),
+		toNano:       to.Truncate(time.Second).UnixNano(),
+		targetPoints: targetPoints,
+	}
+	s.queryCacheMu.Lock()
+	if cached, ok := s.queryCache[cacheKey]; ok {
+		s.queryCacheMu.Unlock()
+		return cached, nil
+	}
+	s.queryCacheMu.Unlock()
+
 	var resolutions []string
 	var resDurations []time.Duration
 	for _, tc := range s.configs {
@@ -271,81 +295,99 @@ func (s *Store) QueryRangeWithMeta(from, to time.Time, targetPoints int) (*Histo
 
 	duration := to.Sub(from)
 
-	// Try each tier from highest to lowest resolution
+	// Try each tier from finest (0) to coarsest.
 	for tierIdx := 0; tierIdx < len(s.tiers); tierIdx++ {
-		// Estimate sample count for this tier
+		tier := s.tiers[tierIdx]
+
+		// Skip entirely if this tier has no data for the window.
+		if tier.Count() == 0 {
+			continue
+		}
+		oldest := tier.OldestTimestamp()
+		newest := tier.NewestTimestamp()
+		// Tier doesn't cover any part of [from, to]
+		if oldest.After(to) || newest.Before(from) {
+			continue
+		}
+
+		// Estimate sample count for this tier.
 		resDur := time.Second
 		if tierIdx < len(resDurations) {
 			resDur = resDurations[tierIdx]
 		}
 		estimatedSamples := int(duration / resDur)
 
-		// Skip this tier if it would produce too many samples
-		// (unless it's the last tier — always use it as fallback)
+		// If the estimated count is far beyond what the screen needs AND there
+		// is a coarser tier available, prefer the coarser tier to avoid
+		// reading and downsampling a large slice in-process.
 		maxAllowed := maxSamples
 		if targetPoints > maxAllowed {
 			maxAllowed = targetPoints
 		}
-		if estimatedSamples > maxAllowed && tierIdx < len(s.tiers)-1 {
+		if estimatedSamples > maxAllowed*2 && tierIdx < len(s.tiers)-1 {
 			continue
 		}
 
-		tier := s.tiers[tierIdx]
-		oldest := tier.OldestTimestamp()
+		samples, err := tier.ReadRange(from, to)
+		if err != nil {
+			return nil, fmt.Errorf("reading tier %d: %w", tierIdx, err)
+		}
+		if len(samples) == 0 {
+			continue
+		}
 
-		// If this tier has data covering (or partially covering) the requested range, use it
-		if tier.Count() > 0 && !oldest.After(to) {
-			samples, err := tier.ReadRange(from, to)
-			if err != nil {
-				return nil, fmt.Errorf("reading tier %d: %w", tierIdx, err)
-			}
-			if len(samples) > 0 {
-				res := "1s"
-				if tierIdx < len(resolutions) {
-					res = resolutions[tierIdx]
-				}
+		res := "1s"
+		if tierIdx < len(resolutions) {
+			res = resolutions[tierIdx]
+		}
 
-				if len(samples) > int(float64(targetPoints)*1.5) {
-					groupSize := len(samples) / targetPoints
-					if groupSize > 1 {
-						downsampled := make([]*AggregatedSample, 0, (len(samples)/groupSize)+1)
-						for i := 0; i < len(samples); i += groupSize {
-							end := i + groupSize
-							if end > len(samples) {
-								end = len(samples)
-							}
-							group := samples[i:end]
+		if len(samples) > int(float64(targetPoints)*1.5) {
+			groupSize := len(samples) / targetPoints
+			if groupSize > 1 {
+				downsampled := make([]*AggregatedSample, 0, (len(samples)/groupSize)+1)
+				for i := 0; i < len(samples); i += groupSize {
+					end := i + groupSize
+					if end > len(samples) {
+						end = len(samples)
+					}
+					group := samples[i:end]
 
-							var totalDur time.Duration
-							for _, s := range group {
-								totalDur += s.Duration
-							}
+					var totalDur time.Duration
+					for _, s := range group {
+						totalDur += s.Duration
+					}
 
-							agg := s.aggregateAggregated(group, totalDur)
-							if agg != nil {
-								downsampled = append(downsampled, agg)
-							}
-						}
-						samples = downsampled
-						resDur := time.Second
-						if tierIdx < len(resDurations) {
-							resDur = resDurations[tierIdx]
-						}
-						res = fmtRes(resDur * time.Duration(groupSize))
+					agg := s.aggregateAggregated(group, totalDur)
+					if agg != nil {
+						downsampled = append(downsampled, agg)
 					}
 				}
-
-				return &HistoryResult{
-					Samples:    samples,
-					Tier:       tierIdx,
-					Resolution: res,
-				}, nil
+				samples = downsampled
+				resDur := time.Second
+				if tierIdx < len(resDurations) {
+					resDur = resDurations[tierIdx]
+				}
+				res = fmtRes(resDur * time.Duration(groupSize))
 			}
 		}
+
+		result := &HistoryResult{
+			Samples:    samples,
+			Tier:       tierIdx,
+			Resolution: res,
+		}
+
+		// Store in cache — will be invalidated by the next WriteSample call.
+		s.queryCacheMu.Lock()
+		s.queryCache[cacheKey] = result
+		s.queryCacheMu.Unlock()
+
+		return result, nil
 	}
 
 	// No data found in any tier
-	return &HistoryResult{Tier: 0, Resolution: resolutions[0]}, nil
+	res := resolutions[0]
+	return &HistoryResult{Tier: 0, Resolution: res}, nil
 }
 
 // QueryLatest returns the latest sample from tier 1.

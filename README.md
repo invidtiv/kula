@@ -230,6 +230,43 @@ export KULA_PORT="27960"
 ./kula inspect
 ```
 
+### Prometheus metrics
+
+Kula exposes all collected metrics in [Prometheus text exposition format](https://prometheus.io/docs/instrumenting/exposition_formats/) at:
+
+```
+http://localhost:27960/metrics
+```
+
+The endpoint is **unauthenticated** by design so Prometheus scrapers work without credentials. Add it to your `prometheus.yml`:
+
+```yaml
+scrape_configs:
+  - job_name: kula
+    static_configs:
+      - targets: ["localhost:27960"]
+```
+
+Exposed metric families:
+
+| Prefix | Description |
+|--------|-------------|
+| `kula_cpu_*` | CPU usage, per-mode percentages, core count, temperature |
+| `kula_load_average_*` | 1 / 5 / 15 min load averages |
+| `kula_memory_*` | Total, used, free, available, buffers, cached, shmem |
+| `kula_swap_*` | Total, used, free |
+| `kula_network_*` | Per-interface Mbps, packets/s, totals, errors, drops |
+| `kula_tcp_*` | Established connections, error rate, reset rate |
+| `kula_sockets_*` | TCP / UDP socket counts |
+| `kula_disk_*` | Per-device IOPS, throughput, utilization, temperature |
+| `kula_filesystem_*` | Per-mount size, used, available |
+| `kula_system_*` | Uptime, entropy, clock sync, logged-in users |
+| `kula_processes_*` | Running, sleeping, zombie, blocked, threads |
+| `kula_gpu_*` | Temperature, load, power, VRAM (NVIDIA) |
+| `kula_self_*` | Kula's own CPU%, RSS memory, open file descriptors |
+
+All metrics include a `host` label set to the monitored machine's hostname.
+
 ### Authentication (Optional)
 
 ```bash

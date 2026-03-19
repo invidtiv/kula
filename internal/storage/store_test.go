@@ -422,8 +422,8 @@ func TestInspectTierFile(t *testing.T) {
 	if info.Count == 0 {
 		t.Error("InspectTierFile() returned Count = 0")
 	}
-	if info.Version != version {
-		t.Errorf("InspectTierFile() Version = %d, want %d", info.Version, version)
+	if info.Version != codecVersion2 {
+		t.Errorf("InspectTierFile() Version = %d, want %d", info.Version, codecVersion2)
 	}
 	if info.NewestTS.IsZero() {
 		t.Error("InspectTierFile() NewestTS is zero")
@@ -881,3 +881,261 @@ func BenchmarkDownsampling(b *testing.B) {
 		}
 	}
 }
+
+// ============================================================================
+// New feature tests
+// ============================================================================
+
+// ---- Query cache ------------------------------------------------------------
+
+// TestQueryCacheHit verifies that a second identical query is served from the
+// in-process cache and returns the same results.
+func TestQueryCacheHit(t *testing.T) {
+	store := newTestStore(t)
+	defer func() { _ = store.Close() }()
+
+	base := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+	for i := 0; i < 5; i++ {
+		ts := base.Add(time.Duration(i) * time.Second)
+		if err := store.WriteSample(makeSampleWithCPU(ts, float64(i*10))); err != nil {
+			t.Fatalf("WriteSample(%d): %v", i, err)
+		}
+	}
+
+	from := base.Add(-time.Second)
+	to := base.Add(10 * time.Second)
+
+	r1, err := store.QueryRangeWithMeta(from, to, 100)
+	if err != nil {
+		t.Fatalf("first QueryRangeWithMeta: %v", err)
+	}
+	if len(r1.Samples) == 0 {
+		t.Fatal("first query returned 0 samples")
+	}
+
+	r2, err := store.QueryRangeWithMeta(from, to, 100)
+	if err != nil {
+		t.Fatalf("second QueryRangeWithMeta: %v", err)
+	}
+	if len(r1.Samples) != len(r2.Samples) {
+		t.Errorf("cache hit returned different sample count: first=%d second=%d",
+			len(r1.Samples), len(r2.Samples))
+	}
+
+	store.queryCacheMu.Lock()
+	cacheSize := len(store.queryCache)
+	store.queryCacheMu.Unlock()
+	if cacheSize == 0 {
+		t.Error("queryCache is empty after two identical queries — cache not populated")
+	}
+}
+
+// TestQueryCacheInvalidatedOnWrite verifies that WriteSample clears the
+// query cache so stale results are never returned.
+func TestQueryCacheInvalidatedOnWrite(t *testing.T) {
+	store := newTestStore(t)
+	defer func() { _ = store.Close() }()
+
+	base := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+	if err := store.WriteSample(makeSampleWithCPU(base, 10.0)); err != nil {
+		t.Fatalf("WriteSample: %v", err)
+	}
+
+	from := base.Add(-time.Second)
+	to := base.Add(3 * time.Second)
+
+	// Populate the cache.
+	r1, _ := store.QueryRangeWithMeta(from, to, 100)
+
+	// A second write should clear the cache.
+	if err := store.WriteSample(makeSampleWithCPU(base.Add(time.Second), 99.0)); err != nil {
+		t.Fatalf("WriteSample 2: %v", err)
+	}
+
+	store.queryCacheMu.Lock()
+	cacheSize := len(store.queryCache)
+	store.queryCacheMu.Unlock()
+	if cacheSize != 0 {
+		t.Errorf("queryCache should be empty after WriteSample, got %d entries", cacheSize)
+	}
+
+	// Re-query: should now include the second sample.
+	r2, err := store.QueryRangeWithMeta(from, to, 100)
+	if err != nil {
+		t.Fatalf("QueryRangeWithMeta after invalidation: %v", err)
+	}
+	if len(r2.Samples) <= len(r1.Samples) {
+		t.Errorf("expected more samples after cache invalidation: before=%d after=%d",
+			len(r1.Samples), len(r2.Samples))
+	}
+}
+
+// ---- ts.After(to) early exit ------------------------------------------------
+
+// TestReadRangeEarlyExitAfterWindow verifies that ReadRange returns only
+// records within [from, to] and does not include records past 'to'.
+func TestReadRangeEarlyExitAfterWindow(t *testing.T) {
+	store := newTestStore(t)
+	defer func() { _ = store.Close() }()
+
+	base := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+	const n = 20
+	for i := 0; i < n; i++ {
+		ts := base.Add(time.Duration(i) * time.Second)
+		if err := store.WriteSample(makeSampleWithCPU(ts, float64(i))); err != nil {
+			t.Fatalf("WriteSample(%d): %v", i, err)
+		}
+	}
+
+	from := base.Add(7 * time.Second)
+	to := base.Add(12 * time.Second)
+
+	results, err := store.tiers[0].ReadRange(from, to)
+	if err != nil {
+		t.Fatalf("ReadRange: %v", err)
+	}
+	if len(results) == 0 {
+		t.Fatal("ReadRange returned 0 results for mid-window query")
+	}
+	for _, r := range results {
+		if r.Timestamp.Before(from) || r.Timestamp.After(to) {
+			t.Errorf("result timestamp %v outside window [%v, %v]",
+				r.Timestamp, from, to)
+		}
+	}
+}
+
+// ---- Timestamp propagation --------------------------------------------------
+
+// TestBinaryTimestampPropagation verifies that collector.Sample.Timestamp is
+// correctly set after binary encode→decode. This was the bug that caused the
+// dashboard to display all historical points at year 1.
+func TestBinaryTimestampPropagation(t *testing.T) {
+	store := newTestStore(t)
+	defer func() { _ = store.Close() }()
+
+	want := time.Date(2026, 3, 19, 1, 0, 0, 0, time.UTC)
+	if err := store.WriteSample(makeSample(want)); err != nil {
+		t.Fatalf("WriteSample: %v", err)
+	}
+
+	results, err := store.tiers[0].ReadRange(want.Add(-time.Second), want.Add(time.Second))
+	if err != nil {
+		t.Fatalf("ReadRange: %v", err)
+	}
+	if len(results) == 0 {
+		t.Fatal("ReadRange returned no results")
+	}
+
+	got := results[0]
+	if got.Timestamp.IsZero() {
+		t.Error("AggregatedSample.Timestamp is zero after decode")
+	}
+	if !got.Timestamp.Equal(want) {
+		t.Errorf("AggregatedSample.Timestamp = %v, want %v", got.Timestamp, want)
+	}
+	if got.Data == nil {
+		t.Fatal("AggregatedSample.Data is nil")
+	}
+	// Key regression: collector.Sample.Timestamp must be propagated from the outer ts.
+	if got.Data.Timestamp.IsZero() {
+		t.Error("collector.Sample.Timestamp is zero after decode — this was the dashboard bug")
+	}
+	if !got.Data.Timestamp.Equal(want) {
+		t.Errorf("collector.Sample.Timestamp = %v, want %v", got.Data.Timestamp, want)
+	}
+}
+
+// ---- Ratio caching ----------------------------------------------------------
+
+// TestRatioCachingMultiTier verifies that ratio1/ratio2 are computed once at
+// NewStore and match the configured tier resolutions.
+func TestRatioCachingMultiTier(t *testing.T) {
+	dir := t.TempDir()
+	cfg := config.StorageConfig{
+		Directory: dir,
+		Tiers: []config.TierConfig{
+			{Resolution: time.Second, MaxSize: "10MB", MaxBytes: 10 * 1024 * 1024},
+			{Resolution: time.Minute, MaxSize: "10MB", MaxBytes: 10 * 1024 * 1024},
+			{Resolution: 5 * time.Minute, MaxSize: "10MB", MaxBytes: 10 * 1024 * 1024},
+		},
+	}
+	store, err := NewStore(cfg)
+	if err != nil {
+		t.Fatalf("NewStore: %v", err)
+	}
+	defer func() { _ = store.Close() }()
+
+	// ratio1 = tier1.Resolution / tier0.Resolution = 60s / 1s = 60
+	if store.ratio1 != 60 {
+		t.Errorf("ratio1 = %d, want 60", store.ratio1)
+	}
+	// ratio2 = tier2.Resolution / tier1.Resolution = 5m / 1m = 5
+	if store.ratio2 != 5 {
+		t.Errorf("ratio2 = %d, want 5", store.ratio2)
+	}
+}
+
+// TestRatioCachingSingleTier verifies that a single-tier store (no
+// aggregation) has both ratios set to 0.
+func TestRatioCachingSingleTier(t *testing.T) {
+	store := newTestStore(t)
+	defer func() { _ = store.Close() }()
+
+	if store.ratio1 != 0 {
+		t.Errorf("single-tier store ratio1 = %d, want 0", store.ratio1)
+	}
+	if store.ratio2 != 0 {
+		t.Errorf("single-tier store ratio2 = %d, want 0", store.ratio2)
+	}
+}
+
+// ---- Segment-1 skip for wrapped tiers ---------------------------------------
+
+// TestWrappedTierRecentQueryCorrect verifies that after the ring buffer wraps,
+// a query for the last N seconds returns only records from that window.
+func TestWrappedTierRecentQueryCorrect(t *testing.T) {
+	dir := t.TempDir()
+	cfg := config.StorageConfig{
+		Directory: dir,
+		Tiers: []config.TierConfig{
+			{Resolution: time.Second, MaxSize: "64KB", MaxBytes: 64 * 1024},
+		},
+	}
+	store, err := NewStore(cfg)
+	if err != nil {
+		t.Fatalf("NewStore: %v", err)
+	}
+	defer func() { _ = store.Close() }()
+
+	base := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+	total := 300
+	for i := 0; i < total; i++ {
+		ts := base.Add(time.Duration(i) * time.Second)
+		if err := store.WriteSample(makeSampleWithCPU(ts, float64(i))); err != nil {
+			t.Fatalf("WriteSample(%d): %v", i, err)
+		}
+	}
+
+	if !store.tiers[0].wrapped {
+		t.Skip("tier did not wrap — increase total or decrease MaxBytes")
+	}
+
+	from := base.Add(time.Duration(total-10) * time.Second)
+	to := base.Add(time.Duration(total) * time.Second)
+
+	results, err := store.tiers[0].ReadRange(from, to)
+	if err != nil {
+		t.Fatalf("ReadRange: %v", err)
+	}
+	if len(results) < 8 {
+		t.Errorf("ReadRange after wrap returned %d results, expected ~10", len(results))
+	}
+	for _, r := range results {
+		if r.Timestamp.Before(from) || r.Timestamp.After(to) {
+			t.Errorf("result timestamp %v outside window [%v, %v]",
+				r.Timestamp, from, to)
+		}
+	}
+}
+

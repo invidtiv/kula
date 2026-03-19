@@ -413,8 +413,8 @@ func parseMemInfo() map[string]uint64 {
 	return result
 }
 
-// formatUptime converts seconds to human-readable uptime.
-func formatUptime(secs float64) string {
+// FormatUptime converts seconds to human-readable uptime.
+func FormatUptime(secs float64) string {
 	d := int(secs) / 86400
 	h := (int(secs) % 86400) / 3600
 	m := (int(secs) % 3600) / 60
