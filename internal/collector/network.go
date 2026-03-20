@@ -159,7 +159,8 @@ func parseSocketStats() SocketStats {
 		switch fields[0] {
 		case "TCP:":
 			for i := 1; i+1 < len(fields); i += 2 {
-				val, _ := strconv.Atoi(fields[i+1])
+				val64, _ := strconv.ParseInt(fields[i+1], 10, 32)
+				val := int(val64)
 				switch fields[i] {
 				case "inuse":
 					ss.TCPInUse = val
@@ -169,7 +170,8 @@ func parseSocketStats() SocketStats {
 			}
 		case "UDP:":
 			for i := 1; i+1 < len(fields); i += 2 {
-				val, _ := strconv.Atoi(fields[i+1])
+				val64, _ := strconv.ParseInt(fields[i+1], 10, 32)
+				val := int(val64)
 				if fields[i] == "inuse" {
 					ss.UDPInUse = val
 				}

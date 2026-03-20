@@ -31,7 +31,7 @@ func (c *Collector) collectSystem() SystemStats {
 
 	// Entropy
 	if data, err := os.ReadFile(filepath.Join(procPath, "sys/kernel/random/entropy_avail")); err == nil {
-		s.Entropy, _ = strconv.Atoi(strings.TrimSpace(string(data)))
+		s.Entropy = int(c.parseInt(strings.TrimSpace(string(data)), 10, 32, "system.entropy"))
 	}
 
 	// Clock source
@@ -124,7 +124,7 @@ func countUsersFromProc() int {
 			continue
 		}
 		pid := entry.Name()
-		if _, err := strconv.Atoi(pid); err != nil {
+		if _, err := strconv.ParseInt(pid, 10, 64); err != nil {
 			continue
 		}
 

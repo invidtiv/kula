@@ -192,7 +192,8 @@ func Load(path string) (*Config, error) {
 		cfg.Web.Listen = listen
 	}
 	if portStr := os.Getenv("KULA_PORT"); portStr != "" {
-		if port, err := strconv.Atoi(portStr); err == nil {
+		if port64, err := strconv.ParseInt(portStr, 10, 32); err == nil {
+			port := int(port64)
 			if port > 0 && port <= 65535 {
 				cfg.Web.Port = port
 			} else {

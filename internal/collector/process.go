@@ -20,7 +20,7 @@ func collectProcesses() ProcessStats {
 			continue
 		}
 		// Only numeric directories (PIDs)
-		if _, err := strconv.Atoi(entry.Name()); err != nil {
+		if _, err := strconv.ParseInt(entry.Name(), 10, 64); err != nil {
 			continue
 		}
 

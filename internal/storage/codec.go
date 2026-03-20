@@ -222,8 +222,12 @@ func appendFixed(buf []byte, s *collector.Sample) []byte {
 	putF32(b[34:], s.LoadAvg.Load1)
 	putF32(b[38:], s.LoadAvg.Load5)
 	putF32(b[42:], s.LoadAvg.Load15)
-	binary.LittleEndian.PutUint16(b[46:], uint16(s.LoadAvg.Running))
-	binary.LittleEndian.PutUint16(b[48:], uint16(s.LoadAvg.Total))
+	run := s.LoadAvg.Running
+	if run < 0 { run = 0 } else if run > 65535 { run = 65535 }
+	binary.LittleEndian.PutUint16(b[46:], uint16(run))
+	tot := s.LoadAvg.Total
+	if tot < 0 { tot = 0 } else if tot > 65535 { tot = 65535 }
+	binary.LittleEndian.PutUint16(b[48:], uint16(tot))
 	// Memory (60 bytes)
 	binary.LittleEndian.PutUint64(b[50:], s.Memory.Total)
 	binary.LittleEndian.PutUint64(b[58:], s.Memory.Free)
@@ -254,7 +258,9 @@ func appendFixed(buf []byte, s *collector.Sample) []byte {
 	binary.LittleEndian.PutUint32(b[186:], uint32(int32(s.Process.Threads)))
 	// System (14 bytes)
 	binary.LittleEndian.PutUint64(b[190:], math.Float64bits(s.System.Uptime))
-	binary.LittleEndian.PutUint32(b[198:], uint32(int32(s.System.Entropy)))
+	ent := s.System.Entropy
+	if ent < 0 { ent = 0 } else if ent > math.MaxInt32 { ent = math.MaxInt32 }
+	binary.LittleEndian.PutUint32(b[198:], uint32(int32(ent)))
 	b[202] = uint8(s.System.UserCount)
 	if s.System.ClockSync {
 		b[203] = 1
