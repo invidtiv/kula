@@ -238,67 +238,7 @@ export KULA_PORT="27960"
 
 ### Prometheus metrics
 
-Kula can expose collected metrics in [Prometheus text exposition format](https://prometheus.io/docs/instrumenting/exposition_formats/) at:
-
-```
-http://localhost:27960/metrics
-```
-
-The endpoint is **disabled by default**. Enable it in `config.yaml`:
-
-```yaml
-web:
-  metrics:
-    enabled: true
-    token: ""
-```
-
-If you set `web.metrics.token`, scrapers must send a bearer token:
-
-```http
-Authorization: Bearer <token>
-```
-
-Example `prometheus.yml` without a token:
-
-```yaml
-scrape_configs:
-  - job_name: kula
-    static_configs:
-      - targets: ["localhost:27960"]
-```
-
-Example `prometheus.yml` with a bearer token:
-
-```yaml
-scrape_configs:
-  - job_name: kula
-    static_configs:
-      - targets: ["localhost:27960"]
-    authorization:
-      type: Bearer
-      credentials: "your-metrics-token"
-```
-
-Exposed metric families:
-
-| Prefix | Description |
-|--------|-------------|
-| `kula_cpu_*` | CPU usage, per-mode percentages, core count, temperature |
-| `kula_load_average_*` | 1 / 5 / 15 min load averages |
-| `kula_memory_*` | Total, used, free, available, buffers, cached, shmem |
-| `kula_swap_*` | Total, used, free |
-| `kula_network_*` | Per-interface Mbps, packets/s, totals, errors, drops |
-| `kula_tcp_*` | Established connections, error rate, reset rate |
-| `kula_sockets_*` | TCP / UDP socket counts |
-| `kula_disk_*` | Per-device IOPS, throughput, utilization, temperature |
-| `kula_filesystem_*` | Per-mount size, used, available |
-| `kula_system_*` | Uptime, entropy, clock sync, logged-in users |
-| `kula_processes_*` | Running, sleeping, zombie, blocked, threads |
-| `kula_gpu_*` | Temperature, load, power, VRAM (NVIDIA) |
-| `kula_self_*` | Kula's own CPU%, RSS memory, open file descriptors |
-
-All metrics include a `host` label set to the monitored machine's hostname.
+See: [Prometheus metrics](https://github.com/c0m4r/kula/wiki/Prometheus-metrics) for more info.
 
 ### Health endpoints
 
