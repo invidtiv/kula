@@ -292,10 +292,10 @@ All settings live in `config.yaml`. See [`config.example.yaml`](config.example.y
 # Lint + test suite
 bash ./addons/check.sh
 
-# Build dev (Binary size: ~14MB)
+# Build dev (Binary size: ~17MB)
 CGO_ENABLED=0 go build -o kula ./cmd/kula/
 
-# Build prod (Binary size: ~9MB, xz: ~3MB)
+# Build prod (Binary size: ~12MB, xz: ~4MB)
 CGO_ENABLED=0 go build -trimpath -ldflags="-s -w" -buildvcs=false -o kula ./cmd/kula/
 ```
 
