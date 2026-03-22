@@ -1,3 +1,5 @@
+/addons/ansible/hosts
+/addons/ansible/roles/kula/files/kula*
 /build_appimage
 /build_deb
 /data/

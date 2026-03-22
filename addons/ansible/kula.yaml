@@ -1,0 +1,5 @@
+---
+- name: Deploy Kula
+  hosts: all
+  roles:
+    - kula

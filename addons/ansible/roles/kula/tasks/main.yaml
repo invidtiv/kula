@@ -1,0 +1,48 @@
+- name: Copy kula.deb
+  ansible.builtin.copy:
+    src: kula.deb
+    dest: kula.deb
+    mode: '0644'
+  when: ansible_facts["os_family"] in ["Ubuntu", "Debian"] or ansible_facts["distribution"] in ["Ubuntu", "Debian"]
+
+- name: Install Kula from kula.deb file
+  ansible.builtin.apt:
+    deb: kula.deb
+  become: true
+  when: ansible_facts["os_family"] in ["Ubuntu", "Debian"] or ansible_facts["distribution"] in ["Ubuntu", "Debian"]
+
+- name: Copy kula.rpm
+  ansible.builtin.copy:
+    src: kula.rpm
+    dest: kula.rpm
+    mode: '0644'
+  when: ansible_facts["os_family"] == "RedHat" or ansible_facts["distribution"] in ["RedHat", "Fedora", "CentOS", "Rocky", "AlmaLinux", "Amazon"]
+
+- name: Install Kula from kula.rpm file
+  ansible.builtin.dnf:
+    name: kula.rpm
+    disable_gpg_check: true
+  become: true
+  when: ansible_facts["os_family"] == "RedHat" or ansible_facts["distribution"] in ["RedHat", "Fedora", "CentOS", "Rocky", "AlmaLinux", "Amazon"]
+
+- name: Kula configuration
+  ansible.builtin.template:
+    src: config.yaml.j2
+    dest: /etc/kula/config.yaml
+    owner: kula
+    group: kula
+    mode: '0600'
+  become: true
+
+- name: Enable systemd service
+  ansible.builtin.systemd_service:
+    enabled: true
+    daemon_reload: true
+    name: kula
+  become: true
+
+- name: Restart systemd service
+  ansible.builtin.systemd_service:
+    state: restarted
+    name: kula
+  become: true

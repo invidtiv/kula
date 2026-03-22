@@ -1,0 +1,130 @@
+# Kula Configuration
+# https://github.com/c0m4r/kula
+
+# Note: some settings can be overridden by environment variables
+# - KULA_LOGLEVEL overrides logging.level
+# - KULA_LISTEN overrides web.listen
+# - KULA_PORT overrides web.port
+
+# Global settings
+global:
+  # Overwrite reports hostname (default: system hostname)
+  hostname: ""
+  # Toggle display of OS, Kernel, and Architecture (default: true)
+  show_system_info: {{kula_show_system_info}}
+  # Toggle display of Kula version (default: true)
+  show_version: {{kula_show_version}}
+  # Default theme for the web UI: light or dark (default: dark)
+  default_theme: dark
+
+# Data collection settings
+collection:
+  interval: 1s
+  # You can override the auto-detected list of disks and network interfaces by uncommenting and populating these lists:
+  # devices: ["sda", "nvme0n1"]
+  # mountpoints: ["/", "/mnt/data"]
+  # interfaces: ["eth0", "wlan0"]
+
+# Storage settings (tiered ring-buffer)
+storage:
+  # Insufficient permissions fallbacks to ~/.kula
+  directory: /var/lib/kula
+  tiers:
+    # Tier 1: 1-second resolution
+    - resolution: 1s
+      max_size: 250MB
+    # Tier 2: 1-minute aggregation
+    - resolution: 1m
+      max_size: 150MB
+    # Tier 3: 5-minute aggregation
+    - resolution: 5m
+      max_size: 50MB
+
+# Web UI settings
+web:
+  # Master switch for the web server (default: true)
+  # When false, the network listener is not opened at all.
+  enabled: true
+
+  # Toggle the Web UI/dashboard and its API (default: true)
+  # When false, only Prometheus metrics and health endpoints remain active.
+  ui: true
+
+  listen: "" # use [] brackets for IPv6 addresses, e.g. "[::1]"
+  port: {{kula_port}}
+
+  # Compress HTTP responses and WebSockets (default: true)
+  enable_compression: true
+
+  # Resource limits for WebSocket connections
+  # max_websocket_conns: Global limit (default: 100)
+  # max_websocket_conns_per_ip: Per-IP limit (default: 5)
+  max_websocket_conns: 100
+  max_websocket_conns_per_ip: 5
+
+  # Trust X-Forwarded-Proto headers from reverse proxies for the Secure cookie flag
+  trust_proxy: false
+
+  # Join data points across gaps in the graphs (default: false)
+  # When false, gaps between measurements are displayed as empty space
+  join_metrics: false
+
+  # Default aggregation for historical data: avg, min, or max (default: avg)
+  default_aggregation: avg
+ 
+  # Language settings for the web dashboard
+  lang:
+    # Default language ISO code (default: en)
+    # Available ISO codes: ar, de, en, es, fr, hi, ja, ko, pl, pt, zh
+    default: en
+    # Force the default language and hide the language selector (default: false)
+    force: false
+ 
+  # Optional bounds limits for dynamic charts. "max_mode" can be:
+  # "off": Unrestricted, Chart.js auto-scales Y-axis by stream data peaks.
+  # "on": Imposes a hard Y-axis maximum matching "max_value". 
+  # "auto": Tries to securely detect hardware constraints (e.g CPU TjMax or Net link speed). If failed, falls back to "max_value".
+  graphs:
+    cpu_temp:
+      max_mode: "off"
+      max_value: 100 # Celsius
+    disk_temp:
+      max_mode: "off"
+      max_value: 100 # Celsius
+    network:
+      max_mode: "off"
+      max_value: 1000 # Mbps (1 Gb/s)
+
+  # API Access and Performance Logging
+  logging:
+    enabled: true
+    # "access" (request details)
+    # "perf" (adds DB fetch metrics)
+    # "debug" (i.e. collector auto-discovery)
+    level: "perf"
+
+  # Prometheus metrics endpoint (optional)
+  prometheus_metrics:
+    enabled: false
+    # The endpoint is unauthorized by default.
+    # You can optionally set a bearer token to secure it.
+    # Scrapers must send: Authorization: Bearer <token>
+    token: ""
+
+  # Authentication (optional)
+  auth:
+    enabled: false
+    username: admin
+    # Generate hash and salt with: ./kula hash-password
+    # Copy the output into the fields below:
+    password_hash: ""
+    password_salt: ""
+    session_timeout: 24h
+    argon2:
+      time: 3
+      memory: 32768 # double the OWASP minimum
+      threads: 4
+
+# TUI settings
+tui:
+  refresh_rate: 1s
