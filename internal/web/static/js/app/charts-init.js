@@ -53,7 +53,15 @@ function createTimeSeriesChart(canvasId, datasets, yConfig = {}, extraPlugins = 
             scales: {
                 x: {
                     type: 'time',
-                    time: { tooltipFormat: 'HH:mm:ss', displayFormats: { second: 'HH:mm:ss', minute: 'HH:mm', hour: 'HH:mm' } },
+                    time: { 
+                        tooltipFormat: 'MMM d, HH:mm:ss', 
+                        displayFormats: { 
+                            second: 'HH:mm:ss', 
+                            minute: 'HH:mm', 
+                            hour: 'HH:mm',
+                            day: 'MMM d'
+                        } 
+                    },
                     grid: { display: false },
                     ticks: { maxTicksLimit: 8 },
                 },
@@ -291,10 +299,18 @@ function setChartTimeRange() {
         return;
     }
 
+    const windowSec = (xMax - xMin) / 1000;
+    const minUnit = windowSec >= 259200 ? 'day' : false;
+
     Object.values(state.charts).forEach(chart => {
         if (!chart?.options?.scales?.x || chart.config?.type === 'bar') return;
         chart.options.scales.x.min = xMin;
         chart.options.scales.x.max = xMax;
+        if (minUnit) {
+            chart.options.scales.x.time.minUnit = minUnit;
+        } else {
+            delete chart.options.scales.x.time.minUnit;
+        }
     });
 }
 

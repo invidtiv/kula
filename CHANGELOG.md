@@ -9,6 +9,10 @@ Types of changes: Added, Changed, Deprecated, Removed, Fixed, Security
 
 ## [0.12.1] - 2026-03-22
 
+### Changed
+
+- Dashboard time axis improvements
+
 ### Fixed
 
 - Fix zoom feature regression

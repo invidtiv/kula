@@ -423,11 +423,25 @@ function syncZoom(sourceChart) {
         document.getElementById('time-range-display').textContent = `${fmt(new Date(min))} \u2192 ${fmt(new Date(max))} (Zoomed)`;
     }
 
+    const windowSec = (max - min) / 1000;
+    const minUnit = windowSec >= 259200 ? 'day' : false; // 3 days
+
     Object.values(state.charts).forEach(chart => {
-        if (!chart || chart === sourceChart || !chart.options?.scales?.x) return;
-        chart.options.scales.x.min = min;
-        chart.options.scales.x.max = max;
-        chart.update('none');
+        if (!chart?.options?.scales?.x) return;
+        
+        if (minUnit) {
+            chart.options.scales.x.time.minUnit = minUnit;
+        } else {
+            delete chart.options.scales.x.time.minUnit;
+        }
+
+        if (chart !== sourceChart) {
+            chart.options.scales.x.min = min;
+            chart.options.scales.x.max = max;
+            chart.update('none');
+        } else {
+            chart.update('none');
+        }
     });
 
     // When zooming or panning, fetch the optimal data resolution for the new view.
@@ -540,6 +554,7 @@ function resetZoomAll() {
         if (!chart?.options?.scales?.x) return;
         delete chart.options.scales.x.min;
         delete chart.options.scales.x.max;
+        delete chart.options.scales.x.time.minUnit;
         chart.update('none');
     });
 
