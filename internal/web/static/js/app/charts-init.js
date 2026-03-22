@@ -22,7 +22,17 @@ function createTimeSeriesChart(canvasId, datasets, yConfig = {}, extraPlugins = 
             plugins: {
                 legend: { position: 'top', align: 'end' },
                 zoom: {
-                    pan: { enabled: true, mode: 'x' },
+                    pan: {
+                        enabled: true,
+                        mode: 'x',
+                        onPan: ({ chart }) => {
+                            syncZoom(chart);
+                            if (!state.pausedZoom) {
+                                state.pausedZoom = true;
+                                syncPauseState();
+                            }
+                        },
+                    },
                     zoom: {
                         drag: { enabled: true, backgroundColor: 'rgba(59,130,246,0.1)', borderColor: colors.blue, borderWidth: 1 },
                         mode: 'x',

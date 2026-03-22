@@ -397,6 +397,10 @@ function tryZoomFromBuffer(fromDate, toDate) {
     if (bufStart > fromMs || bufEnd < toMs) return false; // buffer doesn't cover window
 
     // Buffer covers the window — redraw directly from it.
+    state.timeRange = null;
+    state.customFrom = fromDate;
+    state.customTo = toDate;
+
     clearAllChartData();
     const visible = state.dataBuffer.filter(item => {
         const t = new Date(item.ts || item.data?.ts).getTime();
@@ -426,23 +430,21 @@ function syncZoom(sourceChart) {
         chart.update('none');
     });
 
-    // If current data is coarser than 1s and the zoomed window fits within
-    // 1-hour of 1s samples, attempt a higher-resolution fetch.
-    if (min && max && state.currentResolution !== '1s') {
-        const windowSec = (max - min) / 1000;
-        if (windowSec <= 3600) {
-            const fromDate = new Date(min);
-            const toDate   = new Date(max);
-            // First, try to serve directly from the in-memory buffer.
-            if (!tryZoomFromBuffer(fromDate, toDate)) {
-                // Buffer doesn't cover the window — debounce the network fetch
-                // so rapid scroll/pinch events produce only one request.
-                clearTimeout(_zoomFetchTimer);
-                _zoomFetchTimer = setTimeout(() => {
-                    fetchZoomedHistory(fromDate, toDate);
-                }, 150);
-            }
+    // When zooming or panning, fetch the optimal data resolution for the new view.
+    // If we're already at max resolution (1s) and the buffer completely covers the window,
+    // we can skip the network request.
+    if (min && max) {
+        const fromDate = new Date(min);
+        const toDate   = new Date(max);
+        
+        if (state.currentResolution === '1s' && tryZoomFromBuffer(fromDate, toDate)) {
+            return;
         }
+
+        clearTimeout(_zoomFetchTimer);
+        _zoomFetchTimer = setTimeout(() => {
+            fetchZoomedHistory(fromDate, toDate);
+        }, 150);
     }
 }
 
