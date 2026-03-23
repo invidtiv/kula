@@ -13,6 +13,7 @@ Types of changes: Added, Changed, Deprecated, Removed, Fixed, Security
 
 - Focus mode enhancements, option to hide gauges
 - Refine gauages responsiveness
+- ES6 Module Architecture refactor
 
 ### Security
 
