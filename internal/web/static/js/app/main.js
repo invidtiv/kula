@@ -104,7 +104,7 @@ async function init() {
     setupChartActions();
 
     // Split buttons (must be after setupChartActions to avoid being removed)
-    initSplitModule(redrawChartsFromBuffer);
+    initSplitModule(redrawChartsFromBuffer, resetZoomAll);
 
     // Close dropdowns when clicking outside
     document.addEventListener('click', (e) => {

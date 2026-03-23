@@ -10,15 +10,16 @@ import { formatBytesShort, formatPPS } from './utils.js';
 import { i18n } from './i18n.js';
 
 let _redrawFromBuffer = null;
+let _resetZoom = null;
 let _rebuilding = false;
 
-// Cards that receive a split toggle button
+// Cards that receive a split toggle button (string or array of card IDs)
 const SPLIT_BTN_CARD = {
     network:   'card-network',
     diskio:    'card-disk-io',
     diskspace: 'card-disk-space',
     disktemp:  'card-disk-temp',
-    gpu:       'card-gpu-load',
+    gpu:       ['card-gpu-load', 'card-vram'],
 };
 
 // Cards to hide when split is active for a type
@@ -50,8 +51,9 @@ const SPLIT_LS_KEY = {
 // Cached option lists to detect changes
 const splitOptionsCache = {};
 
-export function initSplitModule(redrawFromBufferFn) {
+export function initSplitModule(redrawFromBufferFn, resetZoomFn) {
     _redrawFromBuffer = redrawFromBufferFn;
+    _resetZoom = resetZoomFn || null;
     _addSplitButtons();
 }
 
@@ -81,10 +83,17 @@ export function updateSplitSelectors(s) {
         if (options.length === 0) continue;
         const optKey = options.join(',');
         if (splitOptionsCache[type] !== optKey) {
+            const prevOptions = splitOptionsCache[type] ? splitOptionsCache[type].split(',') : [];
+            const newOptions = options.filter(o => !prevOptions.includes(o));
             splitOptionsCache[type] = optKey;
             _hideOriginalCards(type);
             _buildSplitChartsForType(type, options);
             _triggerRedraw();
+            // Newly detected devices must start with empty metrics — clear any
+            // data that the buffer replay may have populated for them.
+            if (newOptions.length > 0 && prevOptions.length > 0) {
+                _clearDataForOptions(type, newOptions);
+            }
         }
     }
 }
@@ -288,44 +297,72 @@ function _triggerRedraw() {
     }
 }
 
-function _addSplitButtons() {
-    for (const [type, cardId] of Object.entries(SPLIT_BTN_CARD)) {
-        const card = document.getElementById(cardId);
-        if (!card) continue;
-
-        let actions = card.querySelector('.chart-header-right');
-        if (!actions) {
-            actions = document.createElement('div');
-            actions.className = 'chart-header-right';
-            const header = card.querySelector('.chart-header');
-            if (header) header.appendChild(actions);
+function _clearDataForOptions(type, opts) {
+    const charts = state.splitCharts[type];
+    if (!charts) return;
+    const keyMap = {
+        network:   o => [`net_${o}`, `pps_${o}`],
+        diskio:    o => [`diskio_${o}`],
+        diskspace: o => [`diskspace_${o}`],
+        disktemp:  o => [`disktemp_${o}`],
+        gpu:       o => [`gpuload_${o}`, `vram_${o}`, `gputemp_${o}`],
+    };
+    const getKeys = keyMap[type];
+    if (!getKeys) return;
+    for (const opt of opts) {
+        for (const key of getKeys(opt)) {
+            const chart = charts[key];
+            if (chart?.data?.datasets) {
+                chart.data.datasets.forEach(ds => { ds.data = []; });
+                chart.update('none');
+            }
         }
+    }
+}
 
-        const btn = document.createElement('button');
-        btn.className = 'btn-icon btn-split-chart';
-        btn.id = `btn-split-${type}`;
-        btn.title = i18n.t('split_by_device') || 'Split by device';
-        btn.textContent = '⊟';
-        btn.style.fontSize = '0.85rem';
-        btn.style.padding = '0.15rem 0.35rem';
-        btn.style.opacity = getSplitState(type) ? '1' : '0.5';
-        btn.style.transition = 'opacity 0.15s';
-        btn.onmouseenter = () => { btn.style.opacity = '1'; };
-        btn.onmouseleave = () => { if (!getSplitState(type)) btn.style.opacity = '0.5'; };
+function _addSplitButtons() {
+    for (const [type, cardIds] of Object.entries(SPLIT_BTN_CARD)) {
+        const ids = Array.isArray(cardIds) ? cardIds : [cardIds];
+        ids.forEach((cardId, idx) => {
+            const card = document.getElementById(cardId);
+            if (!card) return;
 
-        btn.addEventListener('click', (e) => {
-            e.stopPropagation();
-            _toggleSplit(type);
+            let actions = card.querySelector('.chart-header-right');
+            if (!actions) {
+                actions = document.createElement('div');
+                actions.className = 'chart-header-right';
+                const header = card.querySelector('.chart-header');
+                if (header) header.appendChild(actions);
+            }
+
+            const btn = document.createElement('button');
+            btn.className = 'btn-icon btn-split-chart';
+            btn.dataset.splitBtnType = type;
+            if (idx === 0) btn.id = `btn-split-${type}`;
+            btn.title = i18n.t('split_by_device') || 'Split by device';
+            btn.textContent = '⊟';
+            btn.style.fontSize = '0.85rem';
+            btn.style.padding = '0.15rem 0.35rem';
+            btn.style.opacity = getSplitState(type) ? '1' : '0.5';
+            btn.style.transition = 'opacity 0.15s';
+            btn.onmouseenter = () => { btn.style.opacity = '1'; };
+            btn.onmouseleave = () => { if (!getSplitState(type)) btn.style.opacity = '0.5'; };
+
+            btn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                _toggleSplit(type);
+            });
+
+            // Insert before other buttons so it appears first on the left
+            actions.insertBefore(btn, actions.firstChild);
         });
-
-        // Insert before other buttons so it appears first on the left
-        actions.insertBefore(btn, actions.firstChild);
     }
 }
 
 function _updateSplitBtn(type) {
-    const btn = document.getElementById(`btn-split-${type}`);
-    if (btn) btn.style.opacity = getSplitState(type) ? '1' : '0.5';
+    document.querySelectorAll(`[data-split-btn-type="${type}"]`).forEach(btn => {
+        btn.style.opacity = getSplitState(type) ? '1' : '0.5';
+    });
 }
 
 function _toggleSplit(type) {
@@ -368,7 +405,7 @@ function _destroySplitChartsForType(type) {
     document.querySelectorAll(`[data-split-type="${type}"]`).forEach(el => el.remove());
 }
 
-function _makeSplitCard(cardId, title, type) {
+function _makeSplitCard(cardId, title, type, graphId = null) {
     const card = document.createElement('div');
     card.className = 'chart-card hidden';
     card.id = cardId;
@@ -376,9 +413,53 @@ function _makeSplitCard(cardId, title, type) {
     card.innerHTML = `
         <div class="chart-header">
             <h3>${_escapeHtml(title)}</h3>
+            <div class="chart-header-right"></div>
         </div>
         <div class="chart-body"><canvas id="canvas-${_escapeHtml(cardId)}"></canvas></div>
     `;
+
+    const header = card.querySelector('.chart-header');
+    const actions = card.querySelector('.chart-header-right');
+    header.style.position = 'relative';
+    actions.style.marginLeft = 'auto';
+    actions.style.display = 'flex';
+    actions.style.alignItems = 'center';
+    actions.style.gap = '0.35rem';
+
+    // Join button — collapses split back to the combined chart
+    const joinBtn = document.createElement('button');
+    joinBtn.className = 'btn-icon btn-split-chart';
+    joinBtn.title = i18n.t('join_charts') || 'Join charts';
+    joinBtn.textContent = '⊞';
+    joinBtn.style.fontSize = '0.85rem';
+    joinBtn.style.padding = '0.15rem 0.35rem';
+    joinBtn.style.opacity = '0.5';
+    joinBtn.style.transition = 'opacity 0.15s';
+    joinBtn.onmouseenter = () => { joinBtn.style.opacity = '1'; };
+    joinBtn.onmouseleave = () => { joinBtn.style.opacity = '0.5'; };
+    joinBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        _toggleSplit(type);
+    });
+    actions.appendChild(joinBtn);
+
+    // Y-axis settings button (only for types that support Y-axis limits)
+    if (graphId) {
+        _addSettingsDropdown(header, actions, graphId, type);
+    }
+
+    // Expand button
+    const expandBtn = document.createElement('button');
+    expandBtn.className = 'btn-icon btn-expand-chart';
+    expandBtn.title = 'Expand chart';
+    expandBtn.textContent = '🔍';
+    expandBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        _toggleExpandSplitCard(card);
+    });
+    actions.appendChild(expandBtn);
+
+    // Hover pause
     card.addEventListener('mouseenter', () => {
         state.pausedHover = true;
         document.dispatchEvent(new Event('kula-sync-pause'));
@@ -387,7 +468,197 @@ function _makeSplitCard(cardId, title, type) {
         state.pausedHover = false;
         document.dispatchEvent(new Event('kula-sync-pause'));
     });
+
+    // Double-click on canvas to reset zoom
+    const canvas = card.querySelector('canvas');
+    if (canvas && _resetZoom) {
+        canvas.addEventListener('dblclick', _resetZoom);
+    }
+
     return card;
+}
+
+function _toggleExpandSplitCard(card) {
+    const grid = card.closest('.charts-grid');
+    if (!grid) return;
+    const visibleCards = Array.from(grid.querySelectorAll('.chart-card:not(.hidden)'));
+    const isExpanding = !card.classList.contains('chart-expanded');
+
+    if (isExpanding) {
+        const hasAnyExpanded = visibleCards.some(c => c.classList.contains('chart-expanded'));
+        if (!hasAnyExpanded) {
+            visibleCards.forEach((c, idx) => { c.style.order = (idx + 1) * 10; });
+        }
+        const myTop = card.offsetTop;
+        const sameRowCards = visibleCards.filter(c => Math.abs(c.offsetTop - myTop) < 10);
+        if (sameRowCards.length > 0) {
+            sameRowCards.sort((a, b) => a.offsetLeft - b.offsetLeft);
+            const firstInRow = sameRowCards[0];
+            const firstOrder = parseInt(firstInRow.style.order) || ((visibleCards.indexOf(firstInRow) + 1) * 10);
+            card.style.order = firstOrder - 5;
+        }
+    }
+
+    const isExpanded = card.classList.toggle('chart-expanded');
+
+    if (!isExpanded) {
+        const domIndex = visibleCards.indexOf(card);
+        card.style.order = (domIndex + 1) * 10;
+        const hasAnyExpanded = visibleCards.some(c => c.classList.contains('chart-expanded'));
+        if (!hasAnyExpanded) {
+            visibleCards.forEach(c => { c.style.order = ''; });
+        }
+    }
+
+    const btn = card.querySelector('.btn-expand-chart');
+    if (btn) btn.title = isExpanded ? 'Collapse chart' : 'Expand chart';
+
+    const canvas = card.querySelector('canvas');
+    if (canvas) {
+        for (const typeCharts of Object.values(state.splitCharts)) {
+            for (const chart of Object.values(typeCharts)) {
+                if (chart && chart.canvas === canvas) {
+                    setTimeout(() => chart.resize(), 50);
+                    return;
+                }
+            }
+        }
+    }
+}
+
+function _addSettingsDropdown(header, actions, graphId, type) {
+    const sBtn = document.createElement('button');
+    sBtn.className = 'btn-icon';
+    sBtn.title = 'Graph Bounds';
+    sBtn.textContent = '⚙️';
+    sBtn.style.fontSize = '0.85rem';
+    sBtn.style.padding = '0.15rem 0.35rem';
+    sBtn.style.opacity = '0.5';
+    sBtn.style.transition = 'opacity 0.15s';
+    sBtn.onmouseenter = () => { sBtn.style.opacity = '1'; };
+    sBtn.onmouseleave = () => { sBtn.style.opacity = '0.5'; };
+
+    const dropdown = document.createElement('div');
+    dropdown.className = 'chart-settings-dropdown hidden';
+
+    const titleEl = document.createElement('div');
+    titleEl.style.marginBottom = '0.5rem';
+    titleEl.style.fontSize = '0.75rem';
+    titleEl.style.fontWeight = '600';
+    titleEl.style.textTransform = 'uppercase';
+    titleEl.style.color = 'var(--text-muted)';
+    titleEl.textContent = 'Y-Axis Limit';
+
+    const select = document.createElement('select');
+    select.style.width = '100%';
+    select.style.marginBottom = '0.5rem';
+    select.style.padding = '0.3rem';
+    select.style.borderRadius = 'var(--radius-sm)';
+    select.style.border = '1px solid var(--border)';
+    select.style.background = 'var(--bg-card)';
+    select.style.color = 'var(--text)';
+    select.style.fontSize = '0.85rem';
+    select.innerHTML = `
+        <option value="off">Off (Auto-scale)</option>
+        <option value="on">On (Max Limit)</option>
+    `;
+
+    const input = document.createElement('input');
+    input.type = 'number';
+    input.placeholder = graphId === 'network' ? 'Mbps' : '°C';
+    input.style.width = '100%';
+    input.style.padding = '0.3rem';
+    input.style.borderRadius = 'var(--radius-sm)';
+    input.style.border = '1px solid var(--border)';
+    input.style.background = 'var(--bg-card)';
+    input.style.color = 'var(--text)';
+    input.style.fontSize = '0.85rem';
+
+    select.addEventListener('change', () => {
+        input.style.display = select.value === 'off' ? 'none' : 'block';
+    });
+
+    const saveBtn = document.createElement('button');
+    saveBtn.textContent = 'Apply';
+    saveBtn.style.width = '100%';
+    saveBtn.style.marginTop = '0.75rem';
+    saveBtn.style.padding = '0.4rem';
+    saveBtn.style.borderRadius = 'var(--radius-sm)';
+    saveBtn.style.background = 'var(--accent-blue)';
+    saveBtn.style.color = '#fff';
+    saveBtn.style.border = 'none';
+    saveBtn.style.cursor = 'pointer';
+    saveBtn.style.fontSize = '0.85rem';
+    saveBtn.style.fontWeight = '500';
+
+    dropdown.appendChild(titleEl);
+    dropdown.appendChild(select);
+    dropdown.appendChild(input);
+    dropdown.appendChild(saveBtn);
+
+    header.appendChild(dropdown);
+    actions.appendChild(sBtn);
+
+    sBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        let prefs = {};
+        try { prefs = JSON.parse(localStorage.getItem('kula_graphs_max') || '{}'); } catch (err) { }
+        let cur = prefs[graphId] || (state.configMax && state.configMax[graphId]);
+        if (!cur || !cur.mode) cur = Object.assign({}, cur, { mode: 'off', value: cur?.value || (graphId === 'network' ? 1000 : 100) });
+
+        let uiMode = (cur.mode === 'auto' || cur.mode === 'on') ? 'on' : 'off';
+        let uiVal = cur.value;
+        if (cur.mode === 'auto') {
+            uiVal = (typeof cur.auto === 'number' && cur.auto > 0) ? cur.auto : cur.value;
+        }
+        if (uiMode === 'off') {
+            if (!uiVal) uiVal = (graphId === 'network') ? 1000 : 100;
+            if (cur.auto && cur.auto > 0) uiVal = cur.auto;
+        }
+
+        select.value = uiMode;
+        input.value = uiVal;
+        input.style.display = uiMode === 'off' ? 'none' : 'block';
+
+        document.querySelectorAll('.chart-settings-dropdown').forEach(d => {
+            if (d !== dropdown) d.classList.add('hidden');
+        });
+        dropdown.classList.toggle('hidden');
+    });
+
+    select.addEventListener('click', e => e.stopPropagation());
+    input.addEventListener('click', e => e.stopPropagation());
+    titleEl.addEventListener('click', e => e.stopPropagation());
+    dropdown.addEventListener('click', e => e.stopPropagation());
+
+    saveBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        let prefs = {};
+        try { prefs = JSON.parse(localStorage.getItem('kula_graphs_max') || '{}'); } catch (err) { }
+        prefs[graphId] = {
+            mode: select.value,
+            value: parseFloat(input.value) || (graphId === 'network' ? 1000 : 100)
+        };
+        localStorage.setItem('kula_graphs_max', JSON.stringify(prefs));
+        dropdown.classList.add('hidden');
+        // Rebuild split charts for this type to apply the new Y-axis bound
+        _rebuildSplitType(type);
+    });
+
+    document.addEventListener('click', (e) => {
+        if (!dropdown.classList.contains('hidden') && !dropdown.contains(e.target) && e.target !== sBtn) {
+            dropdown.classList.add('hidden');
+        }
+    });
+}
+
+function _rebuildSplitType(type) {
+    const options = _getOptions(type, null);
+    if (options.length > 0) {
+        _buildSplitChartsForType(type, options);
+        splitOptionsCache[type] = options.join(',');
+        _triggerRedraw();
+    }
 }
 
 function _insertCard(card, gridId, afterCardId) {
@@ -413,7 +684,7 @@ function _buildSplitChartsForType(type, options) {
 
             // Throughput card
             const netCardId = `card-split-net-${safe}`;
-            const netCard = _makeSplitCard(netCardId, `${i18n.t('network_throughput')}: ${iface}`, type);
+            const netCard = _makeSplitCard(netCardId, `${i18n.t('network_throughput')}: ${iface}`, type, 'network');
             _insertCard(netCard, 'charts-grid', prevId);
             prevId = netCardId;
 
@@ -496,7 +767,7 @@ function _buildSplitChartsForType(type, options) {
         for (const dev of options) {
             const safe = _sanitize(dev);
             const cardId = `card-split-disktemp-${safe}`;
-            const card = _makeSplitCard(cardId, `${i18n.t('disk_temp')}: ${dev}`, type);
+            const card = _makeSplitCard(cardId, `${i18n.t('disk_temp')}: ${dev}`, type, 'disk_temp');
             _insertCard(card, 'thermals-grid', prevId);
             prevId = cardId;
 
@@ -546,7 +817,7 @@ function _buildSplitChartsForType(type, options) {
 
             // GPU Temp card (in thermals grid)
             const tempCardId = `card-split-gputemp-${safe}`;
-            const tempCard = _makeSplitCard(tempCardId, `${i18n.t('gpu_temp')}: ${gpu}`, type);
+            const tempCard = _makeSplitCard(tempCardId, `${i18n.t('gpu_temp')}: ${gpu}`, type, 'gpu_temp');
             _insertCard(tempCard, 'thermals-grid', prevThermId);
             prevThermId = tempCardId;
 

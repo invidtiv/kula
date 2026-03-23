@@ -29,6 +29,7 @@ export function createTimeSeriesChart(canvasId, datasets, yConfig = {}, extraPlu
                         enabled: true,
                         mode: 'x',
                         onPanStart: function({ chart }) {
+                            if (state.focusSelecting) return false;
                             state.pausedZoom = true;
                             document.dispatchEvent(new Event('kula-sync-pause'));
                         },
@@ -42,6 +43,7 @@ export function createTimeSeriesChart(canvasId, datasets, yConfig = {}, extraPlu
                         drag: { enabled: true, backgroundColor: 'rgba(59,130,246,0.1)', borderColor: colors.blue, borderWidth: 1 },
                         mode: 'x',
                         onZoomStart: function({ chart }) {
+                            if (state.focusSelecting) return false;
                             state.pausedZoom = true;
                             document.dispatchEvent(new Event('kula-sync-pause'));
                         },

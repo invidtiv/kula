@@ -15,6 +15,11 @@ export const chartCardIds = [
     'card-cpu-temp', 'card-disk-temp', 'card-gpu-temp'
 ];
 
+// Returns all currently visible split chart card elements
+function _getSplitCards() {
+    return Array.from(document.querySelectorAll('.chart-card[data-split-type]'));
+}
+
 export function toggleFocusMode() {
     const grids = document.querySelectorAll('.charts-grid');
     const btn = document.getElementById('btn-focus');
@@ -30,6 +35,7 @@ export function toggleFocusMode() {
             const el = document.getElementById(id);
             if (el) el.classList.remove('focus-visible', 'focus-selected');
         });
+        _getSplitCards().forEach(card => card.classList.remove('focus-visible', 'focus-selected'));
         removeFocusBar();
         localStorage.removeItem('kula_focus_visible');
         state.focusVisible = null;
@@ -43,6 +49,9 @@ export function toggleFocusMode() {
         chartCardIds.forEach(id => {
             const el = document.getElementById(id);
             if (el?.classList.contains('focus-selected')) selected.push(id);
+        });
+        _getSplitCards().forEach(card => {
+            if (card.classList.contains('focus-selected')) selected.push(card.id);
         });
 
         if (selected.length === 0) {
@@ -90,6 +99,12 @@ export function toggleFocusMode() {
                 el.classList.remove('focus-selected');
             }
         });
+        _getSplitCards().forEach(card => {
+            const isSelected = selected.includes(card.id);
+            const isHidden = card.classList.contains('hidden');
+            card.classList.toggle('focus-visible', isSelected && !isHidden);
+            card.classList.remove('focus-selected');
+        });
 
         if (localStorage.getItem('kula_focus_hide_gauges') === 'true') {
             document.getElementById('gauges-row')?.classList.add('focus-hidden');
@@ -124,6 +139,15 @@ export function toggleFocusMode() {
             }
         }
     });
+    _getSplitCards().forEach(card => {
+        if (!card.classList.contains('hidden')) {
+            if (state.focusVisible?.includes(card.id)) {
+                card.classList.add('focus-selected');
+            } else {
+                card.classList.remove('focus-selected');
+            }
+        }
+    });
 
     showFocusBar();
 
@@ -133,6 +157,12 @@ export function toggleFocusMode() {
         if (el && !el.classList.contains('hidden')) {
             el._focusClick = () => el.classList.toggle('focus-selected');
             el.addEventListener('click', el._focusClick);
+        }
+    });
+    _getSplitCards().forEach(card => {
+        if (!card.classList.contains('hidden')) {
+            card._focusClick = () => card.classList.toggle('focus-selected');
+            card.addEventListener('click', card._focusClick);
         }
     });
 }
@@ -221,6 +251,12 @@ export function removeFocusBar() {
             }
         }
     });
+    _getSplitCards().forEach(card => {
+        if (card._focusClick) {
+            card.removeEventListener('click', card._focusClick);
+            delete card._focusClick;
+        }
+    });
 }
 
 export function applyStoredFocusMode() {
@@ -256,6 +292,11 @@ export function applyStoredFocusMode() {
                 el.classList.toggle('focus-visible', isSelected && !isHidden);
             }
         });
+        _getSplitCards().forEach(card => {
+            const isSelected = state.focusVisible.includes(card.id);
+            const isHidden = card.classList.contains('hidden');
+            card.classList.toggle('focus-visible', isSelected && !isHidden);
+        });
 
         if (localStorage.getItem('kula_focus_hide_gauges') === 'true') {
             document.getElementById('gauges-row')?.classList.add('focus-hidden');
@@ -272,12 +313,16 @@ export function combineGrids() {
         const el = document.getElementById(id);
         if (el) mainGrid.appendChild(el);
     });
+    // Also move split cards into the main grid for a unified focus layout
+    _getSplitCards().forEach(card => mainGrid.appendChild(card));
 }
 
 export function restoreGrids() {
     const mainGrid = document.getElementById('charts-grid');
     const thermalsGrid = document.getElementById('thermals-grid');
     if (!mainGrid || !thermalsGrid) return;
+
+    // Restore static cards to their canonical grids
     const thermalsIds = ['card-cpu-temp', 'card-disk-temp', 'card-gpu-temp'];
     chartCardIds.forEach(id => {
         const el = document.getElementById(id);
@@ -289,4 +334,26 @@ export function restoreGrids() {
             }
         }
     });
+
+    // Re-insert split cards after their respective anchor cards so they stay
+    // in the correct position (e.g. network splits after card-pps, not at the end).
+    const insertConfigs = [
+        { afterId: 'card-pps',        type: 'network',   filter: null },
+        { afterId: 'card-disk-io',    type: 'diskio',    filter: null },
+        { afterId: 'card-disk-space', type: 'diskspace', filter: null },
+        { afterId: 'card-vram',       type: 'gpu',       filter: id => !id.startsWith('card-split-gputemp-') },
+        { afterId: 'card-disk-temp',  type: 'disktemp',  filter: null },
+        { afterId: 'card-gpu-temp',   type: 'gpu',       filter: id => id.startsWith('card-split-gputemp-') },
+    ];
+    for (const cfg of insertConfigs) {
+        const anchor = document.getElementById(cfg.afterId);
+        if (!anchor) continue;
+        let insertAfter = anchor;
+        const cards = Array.from(document.querySelectorAll(`[data-split-type="${cfg.type}"]`))
+            .filter(card => !cfg.filter || cfg.filter(card.id));
+        for (const card of cards) {
+            insertAfter.insertAdjacentElement('afterend', card);
+            insertAfter = card;
+        }
+    }
 }
