@@ -20,6 +20,7 @@ CODEC_V2 = 2
 FLAG_HAS_MIN = 1 << 0
 FLAG_HAS_MAX = 1 << 1
 FLAG_HAS_DATA = 1 << 2
+FLAG_HAS_APPS = 1 << 3
 
 FIXED_BLOCK_SIZE = 218  # must match fixedBlockSize in codec.go
 
@@ -264,7 +265,7 @@ def _decode_fixed(data: bytes, off: int) -> Tuple[Dict[str, Any], int]:
 
 
 def _decode_variable(
-    data: bytes, off: int, s: Dict[str, Any]
+    data: bytes, off: int, s: Dict[str, Any], has_apps: bool = False
 ) -> Tuple[Dict[str, Any], int]:
     # pylint: disable=too-many-locals, too-many-statements
     # 1. Network interfaces
@@ -402,8 +403,8 @@ def _decode_variable(
     if gpus:
         s["gpu"] = gpus
 
-    # 7. Application metrics (absent in older records — guard on remaining bytes)
-    if len(data) - off < 1:
+    # 7. Application metrics (only present when flagHasApps is set in preamble)
+    if not has_apps:
         return s, off
 
     apps: Dict[str, Any] = {}
@@ -545,9 +546,11 @@ def decode_v2_record(payload: bytes) -> Optional[Dict[str, Any]]:
             "has_data": bool(flags & FLAG_HAS_DATA),
             "has_min": bool(flags & FLAG_HAS_MIN),
             "has_max": bool(flags & FLAG_HAS_MAX),
+            "has_apps": bool(flags & FLAG_HAS_APPS),
         },
     }
 
+    has_apps = bool(flags & FLAG_HAS_APPS)
     for label, flag in [
         ("data", FLAG_HAS_DATA),
         ("min", FLAG_HAS_MIN),
@@ -555,7 +558,7 @@ def decode_v2_record(payload: bytes) -> Optional[Dict[str, Any]]:
     ]:
         if flags & flag:
             block, off = _decode_fixed(payload, off)
-            block, off = _decode_variable(payload, off, block)
+            block, off = _decode_variable(payload, off, block, has_apps)
             result[label] = block
 
     return result

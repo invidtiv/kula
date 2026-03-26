@@ -17,6 +17,7 @@ const (
 	flagHasMin  uint16 = 1 << 0
 	flagHasMax  uint16 = 1 << 1
 	flagHasData uint16 = 1 << 2
+	flagHasApps uint16 = 1 << 3 // variable block includes application metrics section
 )
 
 // fixedBlockSize is the size in bytes of the encoded fixed scalar block.
@@ -155,7 +156,7 @@ func encodeSample(a *AggregatedSample) ([]byte, error) {
 //
 //	[0:8]   timestamp_ns int64 LE  ← fixed offset; extractTimestamp reads here
 //	[8:16]  duration_ns  int64 LE
-//	[16:18] flags        uint16 LE (flagHasData/Min/Max)
+//	[16:18] flags        uint16 LE (flagHasData/Min/Max/Apps)
 func appendPreamble(buf []byte, a *AggregatedSample) []byte {
 	var b [18]byte
 	binary.LittleEndian.PutUint64(b[0:], uint64(a.Timestamp.UnixNano()))
@@ -170,6 +171,7 @@ func appendPreamble(buf []byte, a *AggregatedSample) []byte {
 	if a.Max != nil {
 		flags |= flagHasMax
 	}
+	flags |= flagHasApps // always set: variable blocks include app metrics section
 	binary.LittleEndian.PutUint16(b[16:], flags)
 	return append(buf, b[:]...)
 }
@@ -494,6 +496,7 @@ func decodeSample(data []byte) (*AggregatedSample, error) {
 	a.Timestamp = time.Unix(0, int64(binary.LittleEndian.Uint64(data[0:])))
 	a.Duration = time.Duration(binary.LittleEndian.Uint64(data[8:]))
 	flags := binary.LittleEndian.Uint16(data[16:])
+	hasApps := flags&flagHasApps != 0
 	off := 18
 
 	if flags&flagHasData != 0 {
@@ -502,7 +505,7 @@ func decodeSample(data []byte) (*AggregatedSample, error) {
 			return nil, fmt.Errorf("decode data fixed: %w", err)
 		}
 		off += n
-		vn, err := decodeVariable(data[off:], s)
+		vn, err := decodeVariable(data[off:], s, hasApps)
 		if err != nil {
 			return nil, fmt.Errorf("decode data variable: %w", err)
 		}
@@ -517,7 +520,7 @@ func decodeSample(data []byte) (*AggregatedSample, error) {
 			return nil, fmt.Errorf("decode min fixed: %w", err)
 		}
 		off += n
-		vn, err := decodeVariable(data[off:], s)
+		vn, err := decodeVariable(data[off:], s, hasApps)
 		if err != nil {
 			return nil, fmt.Errorf("decode min variable: %w", err)
 		}
@@ -532,7 +535,7 @@ func decodeSample(data []byte) (*AggregatedSample, error) {
 			return nil, fmt.Errorf("decode max fixed: %w", err)
 		}
 		off += n
-		vn, err := decodeVariable(data[off:], s)
+		vn, err := decodeVariable(data[off:], s, hasApps)
 		if err != nil {
 			return nil, fmt.Errorf("decode max variable: %w", err)
 		}
@@ -610,8 +613,12 @@ func decodeFixed(data []byte) (*collector.Sample, int, error) {
 }
 
 // decodeVariable decodes the variable-length sections into s.
+// hasApps indicates the variable block includes the application metrics section
+// (flagHasApps was set in the preamble). Old records without the flag must not
+// attempt to decode app metrics because the remaining bytes belong to the next
+// fixed+variable block (min/max) in multi-block aggregated records.
 // Returns the number of bytes consumed and any error.
-func decodeVariable(data []byte, s *collector.Sample) (int, error) {
+func decodeVariable(data []byte, s *collector.Sample, hasApps bool) (int, error) {
 	off := 0
 
 	need := func(n int, ctx string) error {
@@ -808,8 +815,11 @@ func decodeVariable(data []byte, s *collector.Sample) (int, error) {
 		s.GPU = append(s.GPU, g)
 	}
 
-	// ---- Application metrics (absent in older records) ----
-	if len(data)-off < 1 {
+	// ---- Application metrics ----
+	// Old records (pre-flagHasApps) do not contain this section.  In multi-block
+	// aggregated records the remaining bytes after section 6 belong to the next
+	// fixed+variable block (min/max), not to app metrics.
+	if !hasApps {
 		return off, nil
 	}
 

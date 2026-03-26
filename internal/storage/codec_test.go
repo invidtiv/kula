@@ -181,6 +181,77 @@ func TestEncodeNilData(t *testing.T) {
 	}
 }
 
+// ---- TestDecodeOldAggregatedRecord ------------------------------------------
+// Regression test: records written before flagHasApps was introduced have
+// Data+Min+Max blocks without the app metrics section. The decoder must NOT
+// attempt to read app metrics from the remaining bytes (which belong to the
+// next fixed+variable block), avoiding corrupt reads and silent record skipping.
+
+func TestDecodeOldAggregatedRecord(t *testing.T) {
+	now := time.Now().Truncate(time.Millisecond)
+	sample := makeSampleFull(now)
+
+	// Encode a single block's variable section (includes 6 bytes of app metrics).
+	varBuf, err := appendVariable(nil, sample.Data)
+	if err != nil {
+		t.Fatalf("appendVariable: %v", err)
+	}
+
+	// An empty-apps variable section has exactly 6 trailing bytes:
+	// 1 (nginx=0) + 2 (containers=0) + 1 (postgres=0) + 2 (custom=0).
+	const emptyAppsSize = 6
+	oldVarBuf := varBuf[:len(varBuf)-emptyAppsSize]
+
+	// Append 218 bytes of "next fixed block" — simulates a min/max block
+	// that immediately follows the variable section in aggregated records.
+	padded := make([]byte, len(oldVarBuf)+fixedBlockSize)
+	copy(padded, oldVarBuf)
+
+	// With hasApps=false, decodeVariable must consume only sections 1-6
+	// and NOT touch the trailing 218 bytes.
+	target := &collector.Sample{}
+	n, err := decodeVariable(padded, target, false)
+	if err != nil {
+		t.Fatalf("decodeVariable(hasApps=false) error: %v", err)
+	}
+	if n != len(oldVarBuf) {
+		t.Errorf("consumed %d bytes, want %d", n, len(oldVarBuf))
+	}
+	if target.System.Hostname != "test-host" {
+		t.Errorf("Hostname = %q, want %q", target.System.Hostname, "test-host")
+	}
+
+	// Full round-trip: build an old-format multi-block record manually.
+	fixedBuf := appendFixed(nil, sample.Data)
+	var record []byte
+	// Preamble: 18 bytes with flagHasData|flagHasMin|flagHasMax (no flagHasApps).
+	var preamble [18]byte
+	binary.LittleEndian.PutUint64(preamble[0:], uint64(now.UnixNano()))
+	binary.LittleEndian.PutUint64(preamble[8:], uint64(time.Second))
+	binary.LittleEndian.PutUint16(preamble[16:], flagHasData|flagHasMin|flagHasMax)
+	record = append(record, preamble[:]...)
+	// Three identical blocks, each without app metrics.
+	for range 3 {
+		record = append(record, fixedBuf...)
+		record = append(record, oldVarBuf...)
+	}
+
+	decoded, err := decodeSample(record)
+	if err != nil {
+		t.Fatalf("decodeSample of old aggregated record: %v", err)
+	}
+	if decoded.Data == nil || decoded.Min == nil || decoded.Max == nil {
+		t.Fatalf("expected Data/Min/Max non-nil, got Data=%v Min=%v Max=%v",
+			decoded.Data != nil, decoded.Min != nil, decoded.Max != nil)
+	}
+	if decoded.Data.System.Hostname != "test-host" {
+		t.Errorf("Data.Hostname = %q, want %q", decoded.Data.System.Hostname, "test-host")
+	}
+	if decoded.Min.System.Hostname != "test-host" {
+		t.Errorf("Min.Hostname = %q, want %q", decoded.Min.System.Hostname, "test-host")
+	}
+}
+
 // ---- extractTimestamp -------------------------------------------------------
 
 func TestExtractTimestamp_HappyPath(t *testing.T) {
