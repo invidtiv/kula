@@ -98,7 +98,7 @@ func Enforce(configPath string, storageDir string, webPort int, appCfg config.Ap
 		if u, err := url.Parse(appCfg.Nginx.StatusURL); err == nil {
 			port := 80
 			if u.Port() != "" {
-				if p, err := strconv.Atoi(u.Port()); err == nil {
+				if p, err := strconv.Atoi(u.Port()); err == nil && p > 0 && p <= 65535 {
 					port = p
 				}
 			} else if u.Scheme == "https" {
