@@ -365,6 +365,11 @@ func (c *Config) validateTiers() error {
 			tiers[0].Resolution)
 	}
 
+	// Maximum aggregation ratio between consecutive tiers.
+	// A ratio of 300 means at most 300 samples buffered in memory before
+	// flushing to the next tier (e.g. 1s→5m = 300, 5s→1m = 12).
+	const maxRatio = 300
+
 	for i := 1; i < len(tiers); i++ {
 		prev := tiers[i-1].Resolution
 		curr := tiers[i].Resolution
@@ -379,6 +384,14 @@ func (c *Config) validateTiers() error {
 		if curr%prev != 0 {
 			return fmt.Errorf("storage.tiers[%d].resolution (%s) must be a multiple of tiers[%d].resolution (%s)",
 				i, curr, i-1, prev)
+		}
+
+		// Ratio must not exceed maxRatio to limit memory usage and data
+		// loss on shutdown (up to ratio-1 samples can be lost).
+		ratio := int(curr / prev)
+		if ratio > maxRatio {
+			return fmt.Errorf("storage.tiers[%d].resolution (%s) / tiers[%d].resolution (%s) = %d exceeds maximum ratio of %d",
+				i, curr, i-1, prev, ratio, maxRatio)
 		}
 	}
 

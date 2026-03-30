@@ -13,6 +13,7 @@ Types of changes: Added, Changed, Deprecated, Removed, Fixed, Security
 
 - Add collection.interval allowed values list
 - Checking collection.interval and storage.tiers consistency
+- Tier resolutions ratio limit
 - Check prefers-color-scheme to honor user's requested theme
 - Default global.default_theme changed to auto
 

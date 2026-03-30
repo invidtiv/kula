@@ -48,6 +48,8 @@ storage:
     - resolution: 5m
       max_size: 50MB
     # Note: Changing default resolutions may result in unexpected behavior
+    # Too high tier 2 and 3 resolutions could also cause high memory usage
+    # and data loss on shutdown due to samples buffering
 
 # Web UI settings
 web:

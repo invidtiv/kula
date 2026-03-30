@@ -237,6 +237,23 @@ func TestValidateTiers(t *testing.T) {
 			wantErr: true,
 		},
 		{
+			name:     "ratio at limit (300)",
+			interval: time.Second,
+			tiers: []TierConfig{
+				{Resolution: time.Second, MaxSize: "10MB"},
+				{Resolution: 5 * time.Minute, MaxSize: "10MB"},
+			},
+		},
+		{
+			name:     "ratio exceeds limit",
+			interval: time.Second,
+			tiers: []TierConfig{
+				{Resolution: time.Second, MaxSize: "10MB"},
+				{Resolution: 10 * time.Minute, MaxSize: "10MB"},
+			},
+			wantErr: true,
+		},
+		{
 			name:     "no tiers",
 			interval: time.Second,
 			tiers:    nil,
