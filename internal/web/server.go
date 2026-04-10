@@ -696,7 +696,10 @@ func (h *wsHub) broadcast(data []byte) {
 	defer h.mu.RUnlock()
 
 	for client := range h.clients {
-		if !client.paused {
+		client.mu.Lock()
+		paused := client.paused
+		client.mu.Unlock()
+		if !paused {
 			select {
 			case client.sendCh <- data:
 			default:
