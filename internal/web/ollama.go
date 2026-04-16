@@ -9,13 +9,19 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"regexp"
 	"strings"
 	"sync"
 	"time"
 	"unicode/utf8"
 
 	"kula/internal/config"
+	"kula/internal/storage"
 )
+
+// ollamaModelNameRe matches well-formed Ollama model identifiers like
+// "llama3:latest", "library/llama3.1", or "hf.co/user/model:Q4_K_M".
+var ollamaModelNameRe = regexp.MustCompile(`^[A-Za-z0-9._:/-]{1,200}$`)
 
 const (
 	// ollamaMaxPrompt is the maximum allowed prompt length in runes.
@@ -26,21 +32,34 @@ const (
 	ollamaDefaultTimeout = 120 * time.Second
 	// ollamaMaxResponse is the maximum total bytes read from an Ollama stream.
 	ollamaMaxResponse = 10 * 1024 * 1024 // 10 MB
-	// ollamaChatRateLimit is the max requests per IP per minute.
+	// ollamaChatRateLimit is the max chat requests per IP per minute.
 	ollamaChatRateLimit = 10
+	// ollamaMetaRateLimit is the max /models + /context requests per IP per minute.
+	ollamaMetaRateLimit = 60
+	// ollamaMaxToolRounds is the maximum number of tool-call iterations.
+	ollamaMaxToolRounds = 5
+	// ollamaToolMaxItems caps per-category rows in tool result CSV.
+	ollamaToolMaxItems = 10
 )
 
-// chatRateLimiter is a per-IP sliding-window rate limiter for the Ollama chat endpoint.
+// chatRateLimiter is a per-IP sliding-window rate limiter. The limit is set at
+// construction time so a single type can back both the chat endpoint and the
+// lighter-weight /models and /context endpoints.
 type chatRateLimiter struct {
 	mu       sync.Mutex
+	limit    int
 	requests map[string][]time.Time
 }
 
 func newChatRateLimiter() *chatRateLimiter {
-	return &chatRateLimiter{requests: make(map[string][]time.Time)}
+	return &chatRateLimiter{limit: ollamaChatRateLimit, requests: make(map[string][]time.Time)}
 }
 
-// Allow returns true if the IP has made fewer than ollamaChatRateLimit requests in the last minute.
+func newMetaRateLimiter() *chatRateLimiter {
+	return &chatRateLimiter{limit: ollamaMetaRateLimit, requests: make(map[string][]time.Time)}
+}
+
+// Allow returns true if the IP has made fewer than rl.limit requests in the last minute.
 func (rl *chatRateLimiter) Allow(ip string) bool {
 	rl.mu.Lock()
 	defer rl.mu.Unlock()
@@ -52,7 +71,7 @@ func (rl *chatRateLimiter) Allow(ip string) bool {
 			recent = append(recent, t)
 		}
 	}
-	if len(recent) >= ollamaChatRateLimit {
+	if len(recent) >= rl.limit {
 		return false
 	}
 	rl.requests[ip] = append(recent, now)
@@ -79,22 +98,59 @@ func newOllamaClient(cfg config.OllamaConfig) *ollamaClient {
 	return &ollamaClient{cfg: cfg, timeout: d}
 }
 
+// ---- Ollama API types --------------------------------------------------------
+
+// ollamaToolDef describes a function the model may call.
+type ollamaToolDef struct {
+	Type     string         `json:"type"`
+	Function ollamaToolFunc `json:"function"`
+}
+
+type ollamaToolFunc struct {
+	Name        string           `json:"name"`
+	Description string           `json:"description"`
+	Parameters  ollamaToolParams `json:"parameters"`
+}
+
+type ollamaToolParams struct {
+	Type       string                    `json:"type"`
+	Properties map[string]ollamaToolProp `json:"properties"`
+	Required   []string                  `json:"required"`
+}
+
+type ollamaToolProp struct {
+	Type        string   `json:"type"`
+	Description string   `json:"description"`
+	Enum        []string `json:"enum,omitempty"`
+}
+
+// ollamaToolCall is a single tool invocation requested by the model.
+type ollamaToolCall struct {
+	Function struct {
+		Name      string          `json:"name"`
+		Arguments json.RawMessage `json:"arguments"`
+	} `json:"function"`
+}
+
 // ollamaChatRequest is the payload sent to Ollama /api/chat.
 type ollamaChatRequest struct {
 	Model    string          `json:"model"`
 	Messages []ollamaMessage `json:"messages"`
+	Tools    []ollamaToolDef `json:"tools,omitempty"`
 	Stream   bool            `json:"stream"`
 }
 
 type ollamaMessage struct {
-	Role    string `json:"role"`
-	Content string `json:"content"`
+	Role      string           `json:"role"`
+	Content   string           `json:"content,omitempty"`
+	ToolCalls []ollamaToolCall `json:"tool_calls,omitempty"`
 }
 
 // ollamaChunk is one streaming response frame from Ollama.
 type ollamaChunk struct {
 	Message struct {
-		Content string `json:"content"`
+		Content   string           `json:"content"`
+		ToolCalls []ollamaToolCall `json:"tool_calls"`
 	} `json:"message"`
 	Done bool `json:"done"`
 }
@@ -105,6 +161,7 @@ type chatRequest struct {
 	Messages []ollamaMessage `json:"messages"` // prior conversation turns
 	Context  string          `json:"context"`  // "current" or "chart:..."
 	Lang     string          `json:"lang"`     // BCP 47 language code, e.g. "en", "de"
+	Model    string          `json:"model"`    // optional: overrides the configured model
 }
 
 // sanitisePrompt strips null bytes and clamps to ollamaMaxPrompt.
@@ -168,6 +225,35 @@ func (s *Server) handleOllamaChat(w http.ResponseWriter, r *http.Request) {
 	}
 	debugLog := s.cfg.Logging.Enabled && s.cfg.Logging.Level == "debug"
 
+	// Allow the client to override the configured model (e.g. after switching
+	// models in the UI). Reject anything that doesn't look like an Ollama
+	// identifier — length is already bounded by ollamaMaxBody, but we still want
+	// to keep control characters and shell metacharacters out of the proxied
+	// request body.
+	oc := s.ollama
+	if m := strings.TrimSpace(req.Model); m != "" && m != s.ollama.cfg.Model {
+		if ollamaModelNameRe.MatchString(m) {
+			cp := *s.ollama
+			cp.cfg.Model = m
+			oc = &cp
+		}
+	}
+
+	// Wire up tools when storage is available.
+	var tools []ollamaToolDef
+	var toolExecutor func(string, json.RawMessage) string
+	if s.store != nil {
+		tools = []ollamaToolDef{metricsToolDef()}
+		toolExecutor = func(name string, args json.RawMessage) string {
+			switch name {
+			case "get_metrics":
+				return s.executeGetMetrics(args)
+			default:
+				return fmt.Sprintf("unknown tool: %s", name)
+			}
+		}
+	}
+
 	// Stream Ollama response back as SSE.
 	flusher, ok := w.(http.Flusher)
 	if !ok {
@@ -183,7 +269,12 @@ func (s *Server) handleOllamaChat(w http.ResponseWriter, r *http.Request) {
 	rc := http.NewResponseController(w)
 	_ = rc.SetWriteDeadline(time.Time{})
 
-	err := s.ollama.streamChat(r.Context(), messages, w, flusher, debugLog)
+	// Flush headers immediately so the browser opens the stream before Ollama
+	// responds. Without this, tool-call rounds that produce no early text
+	// content would leave the browser with no SSE connection established.
+	flusher.Flush()
+
+	err := oc.streamChat(r.Context(), messages, tools, toolExecutor, w, flusher, debugLog)
 	if err != nil {
 		// If headers already sent, we can only log the error.
 		log.Printf("[Ollama] stream error: %v", err)
@@ -197,18 +288,61 @@ func (s *Server) handleOllamaChat(w http.ResponseWriter, r *http.Request) {
 	flusher.Flush()
 }
 
-// streamChat calls Ollama /api/chat in streaming mode and writes SSE frames
-// to the provided ResponseWriter / Flusher.
+// streamChat runs the agentic tool-calling loop: it calls doStreamRound up to
+// ollamaMaxToolRounds times, executing any requested tools between rounds.
 func (oc *ollamaClient) streamChat(
 	ctx context.Context,
 	messages []ollamaMessage,
+	tools []ollamaToolDef,
+	toolExecutor func(string, json.RawMessage) string,
 	w io.Writer,
 	flusher http.Flusher,
 	debugLog bool,
 ) error {
+	msgs := messages
+	for round := 0; round < ollamaMaxToolRounds; round++ {
+		toolCalls, err := oc.doStreamRound(ctx, msgs, tools, w, flusher, debugLog)
+		if err != nil {
+			return err
+		}
+		if len(toolCalls) == 0 || toolExecutor == nil || len(tools) == 0 {
+			break
+		}
+
+		// Notify the client that tool execution is in progress.
+		_, _ = fmt.Fprintf(w, "event: tool_call\ndata: \n\n")
+		flusher.Flush()
+
+		// Append the assistant's tool-call turn (no text content).
+		msgs = append(msgs, ollamaMessage{Role: "assistant", ToolCalls: toolCalls})
+
+		// Execute each requested tool and append the results.
+		for _, tc := range toolCalls {
+			result := toolExecutor(tc.Function.Name, tc.Function.Arguments)
+			if debugLog {
+				log.Printf("[DEBUG] [Ollama] tool %q result (%d bytes)", tc.Function.Name, len(result))
+			}
+			msgs = append(msgs, ollamaMessage{Role: "tool", Content: result})
+		}
+	}
+	return nil
+}
+
+// doStreamRound performs one HTTP round-trip to Ollama /api/chat, streaming
+// text chunks as SSE data frames. It returns any tool calls present in the
+// final done chunk.
+func (oc *ollamaClient) doStreamRound(
+	ctx context.Context,
+	messages []ollamaMessage,
+	tools []ollamaToolDef,
+	w io.Writer,
+	flusher http.Flusher,
+	debugLog bool,
+) ([]ollamaToolCall, error) {
 	reqBody := ollamaChatRequest{
 		Model:    oc.cfg.Model,
 		Messages: messages,
+		Tools:    tools,
 		Stream:   true,
 	}
 	if debugLog {
@@ -218,7 +352,7 @@ func (oc *ollamaClient) streamChat(
 
 	body, err := json.Marshal(reqBody)
 	if err != nil {
-		return fmt.Errorf("marshal request: %w", err)
+		return nil, fmt.Errorf("marshal request: %w", err)
 	}
 
 	// Use a fresh http.Client with the configured timeout.
@@ -227,30 +361,31 @@ func (oc *ollamaClient) streamChat(
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, apiURL, bytes.NewReader(body))
 	if err != nil {
-		return fmt.Errorf("create request: %w", err)
+		return nil, fmt.Errorf("create request: %w", err)
 	}
 	req.Header.Set("Content-Type", "application/json")
 
 	resp, err := httpClient.Do(req)
 	if err != nil {
-		return fmt.Errorf("connect to ollama: %w", err)
+		return nil, fmt.Errorf("connect to ollama: %w", err)
 	}
 	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode != http.StatusOK {
 		b, _ := io.ReadAll(io.LimitReader(resp.Body, 512))
-		return fmt.Errorf("ollama returned %d: %s", resp.StatusCode, strings.TrimSpace(string(b)))
+		return nil, fmt.Errorf("ollama returned %d: %s", resp.StatusCode, strings.TrimSpace(string(b)))
 	}
 
 	scanner := bufio.NewScanner(io.LimitReader(resp.Body, ollamaMaxResponse)) // [M6]
 	scanner.Buffer(make([]byte, 64*1024), 64*1024)
 
 	var fullResponse strings.Builder
+	var toolCalls []ollamaToolCall
 
 	for scanner.Scan() {
 		select {
 		case <-ctx.Done():
-			return ctx.Err()
+			return nil, ctx.Err()
 		default:
 		}
 		line := scanner.Bytes()
@@ -263,6 +398,10 @@ func (oc *ollamaClient) streamChat(
 				log.Printf("[DEBUG] [Ollama] skipped malformed chunk: %s", line) // [M5]
 			}
 			continue
+		}
+		// Collect tool calls from any chunk (not just the done chunk).
+		if len(chunk.Message.ToolCalls) > 0 {
+			toolCalls = append(toolCalls, chunk.Message.ToolCalls...)
 		}
 		if chunk.Message.Content != "" {
 			if debugLog {
@@ -279,14 +418,69 @@ func (oc *ollamaClient) streamChat(
 		}
 	}
 
-	if debugLog {
+	if debugLog && fullResponse.Len() > 0 {
 		log.Printf("[DEBUG] [Ollama] Output response:\n%s", fullResponse.String())
 	}
 
-	return scanner.Err()
+	return toolCalls, scanner.Err()
 }
 
-// buildOllamaSystemPrompt handles context evaluation based on string input
+// handleOllamaModels returns the list of models available in the Ollama instance.
+func (s *Server) handleOllamaModels(w http.ResponseWriter, r *http.Request) {
+	if s.ollama == nil || !s.ollama.cfg.Enabled {
+		jsonError(w, "ollama is not enabled", http.StatusServiceUnavailable)
+		return
+	}
+	ip := getClientIP(r, s.cfg.TrustProxy)
+	if s.ollamaMetaLim != nil && !s.ollamaMetaLim.Allow(ip) {
+		jsonError(w, "rate limit exceeded", http.StatusTooManyRequests)
+		return
+	}
+	models, err := s.ollama.fetchModels(r.Context())
+	if err != nil {
+		jsonError(w, fmt.Sprintf("ollama unavailable: %v", err), http.StatusBadGateway)
+		return
+	}
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(map[string]interface{}{"models": models})
+}
+
+// fetchModels queries Ollama /api/tags and returns the list of available model names.
+func (oc *ollamaClient) fetchModels(ctx context.Context) ([]string, error) {
+	httpClient := &http.Client{Timeout: 5 * time.Second}
+	apiURL := strings.TrimRight(oc.cfg.URL, "/") + "/api/tags"
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, apiURL, nil)
+	if err != nil {
+		return nil, fmt.Errorf("create request: %w", err)
+	}
+	resp, err := httpClient.Do(req)
+	if err != nil {
+		return nil, fmt.Errorf("connect to ollama: %w", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("ollama returned %d", resp.StatusCode)
+	}
+	var result struct {
+		Models []struct {
+			Name string `json:"name"`
+		} `json:"models"`
+	}
+	if err := json.NewDecoder(io.LimitReader(resp.Body, 64*1024)).Decode(&result); err != nil {
+		return nil, fmt.Errorf("parse models: %w", err)
+	}
+	names := make([]string, 0, len(result.Models))
+	for _, m := range result.Models {
+		if m.Name != "" {
+			names = append(names, m.Name)
+		}
+	}
+	return names, nil
+}
+
+// buildOllamaSystemPrompt builds the system prompt for an Ollama request.
+// ctx is either "current" (live QueryLatest), "chart:…" (CSV data), or a
+// pre-formatted metrics snapshot string cached by the frontend.
 func (s *Server) buildOllamaSystemPrompt(ctx, lang string) string {
 	var sb strings.Builder
 	// These are caveman style prompts, my english is broken, but not as bad :D
@@ -301,10 +495,13 @@ func (s *Server) buildOllamaSystemPrompt(ctx, lang string) string {
 	sb.WriteString("\n")
 
 	if strings.HasPrefix(ctx, "chart:") {
+		// Always include chart CSV for chart sessions — the model needs the raw
+		// values on every turn since they aren't stored in the message history.
 		sb.WriteString("The user has requested analysis of a specific chart. Here is the historical data:\n```csv\n")
 		sb.WriteString(ctx)
 		sb.WriteString("\n```\n")
 	} else if ctx == "current" || ctx == "" {
+		// Fallback when the frontend hasn't cached the snapshot yet.
 		if s.store != nil {
 			if agg, _ := s.store.QueryLatest(); agg != nil && agg.Data != nil {
 				sb.WriteString(agg.Data.FormatForAI())
@@ -315,10 +512,236 @@ func (s *Server) buildOllamaSystemPrompt(ctx, lang string) string {
 			sb.WriteString("No metric data available yet. Ask the user to wait for the first sample.\n")
 		}
 	} else {
-		// Fallback for custom contexts passed directly by the frontend
+		// Pre-formatted metrics snapshot cached by the frontend and re-sent on
+		// every turn, so the model sees the same data across the whole session.
 		sb.WriteString(ctx)
 		sb.WriteString("\n")
 	}
 
+	return sb.String()
+}
+
+// handleOllamaContext returns the current metrics formatted for use as a
+// session context snapshot. The frontend calls this once when a session starts
+// and re-sends the result as the "context" field on every subsequent turn,
+// so the model always sees the same snapshot rather than stale-vs-new values.
+func (s *Server) handleOllamaContext(w http.ResponseWriter, r *http.Request) {
+	if s.ollama == nil || !s.ollama.cfg.Enabled {
+		jsonError(w, "ollama is not enabled", http.StatusServiceUnavailable)
+		return
+	}
+	ip := getClientIP(r, s.cfg.TrustProxy)
+	if s.ollamaMetaLim != nil && !s.ollamaMetaLim.Allow(ip) {
+		jsonError(w, "rate limit exceeded", http.StatusTooManyRequests)
+		return
+	}
+	var contextText string
+	if s.store != nil {
+		if agg, _ := s.store.QueryLatest(); agg != nil && agg.Data != nil {
+			contextText = agg.Data.FormatForAI()
+		}
+	}
+	w.Header().Set("Content-Type", "application/json")
+	_ = json.NewEncoder(w).Encode(map[string]string{"context": contextText})
+}
+
+// ---- Tool definitions --------------------------------------------------------
+
+// metricsToolDef returns the get_metrics tool schema.
+func metricsToolDef() ollamaToolDef {
+	return ollamaToolDef{
+		Type: "function",
+		Function: ollamaToolFunc{
+			Name:        "get_metrics",
+			Description: "Fetch historical time-series metrics for a given resource. Use this when the user asks about trends, history, or a specific past time range.",
+			Parameters: ollamaToolParams{
+				Type: "object",
+				Properties: map[string]ollamaToolProp{
+					"resource": {
+						Type:        "string",
+						Description: "The resource type to fetch.",
+						Enum:        []string{"cpu", "memory", "swap", "load", "network", "disk_io", "disk_space", "gpu"},
+					},
+					"from": {
+						Type:        "string",
+						Description: `Start of the time range. Use a relative duration like "-1h" or "-30m", or an RFC3339 timestamp. Defaults to "-1h" when omitted.`,
+					},
+					"to": {
+						Type:        "string",
+						Description: `End of the time range. Use a relative duration or RFC3339 timestamp. Defaults to now when omitted.`,
+					},
+				},
+				Required: []string{"resource"},
+			},
+		},
+	}
+}
+
+// getMetricsArgs is the decoded argument struct for the get_metrics tool call.
+type getMetricsArgs struct {
+	Resource string `json:"resource"`
+	From     string `json:"from"`
+	To       string `json:"to"`
+}
+
+// executeGetMetrics implements the get_metrics tool: queries storage and returns
+// a CSV time series for the requested resource.
+func (s *Server) executeGetMetrics(argsJSON json.RawMessage) string {
+	var args getMetricsArgs
+	if err := json.Unmarshal(argsJSON, &args); err != nil {
+		return fmt.Sprintf("error: invalid arguments: %v", err)
+	}
+	if s.store == nil {
+		return "error: no storage available"
+	}
+
+	now := time.Now()
+	to := now
+	from := now.Add(-time.Hour)
+
+	parseTime := func(raw string) (time.Time, bool) {
+		if d, err := time.ParseDuration(raw); err == nil {
+			return now.Add(d), true
+		}
+		if t, err := time.Parse(time.RFC3339, raw); err == nil {
+			return t, true
+		}
+		return time.Time{}, false
+	}
+
+	if args.From != "" {
+		if t, ok := parseTime(args.From); ok {
+			from = t
+		}
+	}
+	if args.To != "" {
+		if t, ok := parseTime(args.To); ok {
+			to = t
+		}
+	}
+
+	result, err := s.store.QueryRangeWithMeta(from, to, 100)
+	if err != nil {
+		return fmt.Sprintf("error: query failed: %v", err)
+	}
+	if len(result.Samples) == 0 {
+		return "no data available for the requested time range"
+	}
+
+	return formatMetricsData(args.Resource, result.Samples)
+}
+
+// formatMetricsData converts storage samples for a given resource into a CSV
+// string suitable for LLM consumption.
+func formatMetricsData(resource string, samples []*storage.AggregatedSample) string {
+	var sb strings.Builder
+	switch resource {
+	case "cpu":
+		sb.WriteString("Time,CPU%\n")
+		for _, s := range samples {
+			if s.Data == nil {
+				continue
+			}
+			fmt.Fprintf(&sb, "%s,%.1f\n", s.Timestamp.Format("15:04:05"), s.Data.CPU.Total.Usage)
+		}
+	case "memory":
+		sb.WriteString("Time,Used%,Used_GiB,Total_GiB\n")
+		for _, s := range samples {
+			if s.Data == nil {
+				continue
+			}
+			fmt.Fprintf(&sb, "%s,%.1f,%.2f,%.2f\n",
+				s.Timestamp.Format("15:04:05"),
+				s.Data.Memory.UsedPercent,
+				float64(s.Data.Memory.Used)/(1<<30),
+				float64(s.Data.Memory.Total)/(1<<30))
+		}
+	case "swap":
+		sb.WriteString("Time,Swap_Used%\n")
+		for _, s := range samples {
+			if s.Data == nil {
+				continue
+			}
+			fmt.Fprintf(&sb, "%s,%.1f\n", s.Timestamp.Format("15:04:05"), s.Data.Swap.UsedPercent)
+		}
+	case "load":
+		sb.WriteString("Time,Load1,Load5,Load15\n")
+		for _, s := range samples {
+			if s.Data == nil {
+				continue
+			}
+			fmt.Fprintf(&sb, "%s,%.2f,%.2f,%.2f\n",
+				s.Timestamp.Format("15:04:05"),
+				s.Data.LoadAvg.Load1, s.Data.LoadAvg.Load5, s.Data.LoadAvg.Load15)
+		}
+	case "network":
+		sb.WriteString("Time,Interface,RxMbps,TxMbps\n")
+		for _, s := range samples {
+			if s.Data == nil {
+				continue
+			}
+			shown := len(s.Data.Network.Interfaces)
+			if shown > ollamaToolMaxItems {
+				shown = ollamaToolMaxItems
+			}
+			for _, iface := range s.Data.Network.Interfaces[:shown] {
+				fmt.Fprintf(&sb, "%s,%s,%.2f,%.2f\n",
+					s.Timestamp.Format("15:04:05"),
+					iface.Name, iface.RxMbps, iface.TxMbps)
+			}
+		}
+	case "disk_io":
+		sb.WriteString("Time,Device,Read_MBps,Write_MBps,Util%\n")
+		for _, s := range samples {
+			if s.Data == nil {
+				continue
+			}
+			shown := len(s.Data.Disks.Devices)
+			if shown > ollamaToolMaxItems {
+				shown = ollamaToolMaxItems
+			}
+			for _, d := range s.Data.Disks.Devices[:shown] {
+				fmt.Fprintf(&sb, "%s,%s,%.2f,%.2f,%.1f\n",
+					s.Timestamp.Format("15:04:05"),
+					d.Name, d.ReadBytesPS/1e6, d.WriteBytesPS/1e6, d.Utilization)
+			}
+		}
+	case "disk_space":
+		sb.WriteString("Time,MountPoint,Used%,Used_GiB,Total_GiB\n")
+		for _, s := range samples {
+			if s.Data == nil {
+				continue
+			}
+			shown := len(s.Data.Disks.FileSystems)
+			if shown > ollamaToolMaxItems {
+				shown = ollamaToolMaxItems
+			}
+			for _, fs := range s.Data.Disks.FileSystems[:shown] {
+				fmt.Fprintf(&sb, "%s,%s,%.1f,%.2f,%.2f\n",
+					s.Timestamp.Format("15:04:05"),
+					fs.MountPoint, fs.UsedPct,
+					float64(fs.Used)/(1<<30),
+					float64(fs.Total)/(1<<30))
+			}
+		}
+	case "gpu":
+		sb.WriteString("Time,GPU,Load%,VRAM%\n")
+		for _, s := range samples {
+			if s.Data == nil {
+				continue
+			}
+			shown := len(s.Data.GPU)
+			if shown > ollamaToolMaxItems {
+				shown = ollamaToolMaxItems
+			}
+			for _, g := range s.Data.GPU[:shown] {
+				fmt.Fprintf(&sb, "%s,%s,%.1f,%.1f\n",
+					s.Timestamp.Format("15:04:05"),
+					g.Name, g.LoadPct, g.VRAMUsedPct)
+			}
+		}
+	default:
+		return fmt.Sprintf("unknown resource type: %s\n", resource)
+	}
 	return sb.String()
 }

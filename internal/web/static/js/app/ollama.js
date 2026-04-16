@@ -7,13 +7,25 @@
 import { state, escapeHTML } from './state.js';
 import { i18n } from './i18n.js';
 
-// ---- Conversation history (max 20 turns kept in memory) ----
+// ---- Conversation history (max 20 turns kept per session in memory) ----
 const MAX_HISTORY = 20;
-let conversationHistory = [];
 let isStreaming = false;
 let aiPanelOpen = false;
 let ollamaModel = '';
 let chartObserver = null; // [M2] stored so we can disconnect on re-init
+
+// ---- Sessions ----
+// Each session is an independent analysis thread with its own pinned context
+// (current-metrics snapshot or a specific chart CSV) and its own message
+// history. Sessions live only for the tab's lifetime.
+//   Shape: { id, label, kind: 'current' | 'chart', context, history }
+let sessions = [];
+let activeSessionId = null;
+let nextSessionId = 1;
+
+// ---- Model selection ----
+let selectedModel = '';     // currently selected model name (sent with each request)
+let modelPollTimer = null;  // setTimeout handle for the next models poll
 
 // ---- Init ----
 
@@ -24,21 +36,57 @@ let chartObserver = null; // [M2] stored so we can disconnect on re-init
 export function initOllama(cfg) {
     if (!cfg.ollama_enabled) return;
     ollamaModel = cfg.ollama_model || 'llama3';
+    selectedModel = ollamaModel;
     const btn = document.getElementById('btn-ai');
     if (btn) btn.classList.remove('hidden');
+
+    // Seed the model selector with the config default immediately.
+    const select = document.getElementById('ai-model-select');
+    if (select) {
+        select.innerHTML = `<option value="${ollamaModel}">${ollamaModel}</option>`;
+        select.addEventListener('change', () => { selectedModel = select.value; });
+    }
+
+    // Model polling starts when the panel is opened; see openAIPanel().
 
     // Wire up the panel controls
     document.getElementById('btn-ai-close')?.addEventListener('click', closeAIPanel);
     document.getElementById('btn-ai-send')?.addEventListener('click', sendAnalysis);
     document.getElementById('ai-input')?.addEventListener('keydown', (e) => {
-        if (e.key === 'Escape') { closeAIPanel(); return; } // [L2]
         if (e.key === 'Enter' && !e.shiftKey) {
             e.preventDefault();
             sendAnalysis();
         }
     });
-    document.getElementById('btn-ai-clear')?.addEventListener('click', clearConversation);
+    // Close the panel from any focus when it's open.
+    document.addEventListener('keydown', (e) => {
+        if (e.key === 'Escape' && aiPanelOpen) closeAIPanel();
+    });
+    document.getElementById('btn-ai-clear')?.addEventListener('click', () => {
+        if (isStreaming) return;
+        const sess = getActiveSession();
+        if (!sess || sess.history.length === 0) return;
+        if (!confirm('Clear all messages in this session?')) return;
+        clearConversation();
+    });
+    document.getElementById('btn-ai-session-new')?.addEventListener('click', () => {
+        createSession({ kind: 'current' });
+        fetchSessionContext();
+    });
+    document.getElementById('btn-ai-session-delete')?.addEventListener('click', () => {
+        if (isStreaming) return;
+        const sess = getActiveSession();
+        if (!sess) return;
+        if (!confirm(`Delete session "${sess.label}"?`)) return;
+        deleteSession(sess.id);
+    });
+    document.getElementById('ai-session-select')?.addEventListener('change', (e) => {
+        const id = Number(e.target.value);
+        if (!Number.isNaN(id)) switchSession(id);
+    });
     btn.addEventListener('click', toggleAIPanel);
+
+    wirePanelDragResize();
 
     // Watch for chart elements to add the Analyze button
     document.querySelectorAll('.chart-card, .gauge-card').forEach(card => attachAIButtonToCard(card));
@@ -60,6 +108,187 @@ export function initOllama(cfg) {
     });
     const grid = document.getElementById('charts-grid');
     if (grid) chartObserver.observe(grid, { childList: true, subtree: true });
+}
+
+// ---- Sessions ----
+
+function getActiveSession() {
+    return sessions.find((s) => s.id === activeSessionId) || null;
+}
+
+/** Create a new session, make it active, and refresh the UI. */
+function createSession({ label, context, kind } = {}) {
+    const sess = {
+        id: nextSessionId++,
+        label: label || 'Current metrics',
+        kind: kind || 'current',
+        context: context || 'current',
+        history: [],
+    };
+    sessions.push(sess);
+    activeSessionId = sess.id;
+    renderMessagesForActiveSession();
+    renderSessionsBar();
+    return sess;
+}
+
+/** Switch the active session; repaint the messages pane. */
+function switchSession(id) {
+    if (!sessions.some((s) => s.id === id)) return;
+    activeSessionId = id;
+    renderMessagesForActiveSession();
+    renderSessionsBar();
+}
+
+/** Remove a session; fall through to the newest remaining, or start fresh. */
+function deleteSession(id) {
+    sessions = sessions.filter((s) => s.id !== id);
+    if (sessions.length === 0) {
+        createSession({ kind: 'current' });
+        fetchSessionContext();
+        return;
+    }
+    if (activeSessionId === id) {
+        activeSessionId = sessions[sessions.length - 1].id;
+    }
+    renderMessagesForActiveSession();
+    renderSessionsBar();
+}
+
+/** Repopulate the session <select> from the current sessions list. */
+function renderSessionsBar() {
+    const select = document.getElementById('ai-session-select');
+    if (!select) return;
+    select.innerHTML = '';
+    for (const s of sessions) {
+        const opt = document.createElement('option');
+        opt.value = String(s.id);
+        opt.textContent = (s.kind === 'chart' ? '📊 ' : '💬 ') + s.label;
+        if (s.id === activeSessionId) opt.selected = true;
+        select.appendChild(opt);
+    }
+}
+
+/** Paint the messages pane for the active session's history. */
+function renderMessagesForActiveSession() {
+    const messagesEl = document.getElementById('ai-messages');
+    if (!messagesEl) return;
+    messagesEl.innerHTML = '';
+    const sess = getActiveSession();
+    if (!sess) return;
+    if (sess.history.length === 0 && sess.kind === 'current') {
+        renderWelcomePrompts(messagesEl);
+        return;
+    }
+    for (const m of sess.history) appendMessage(m.role, m.content, false);
+}
+
+const WELCOME_PROMPTS = [
+    'What is the current status?',
+    'Check server load over the last 5 minutes.',
+    'How many network interfaces do we monitor?',
+];
+
+/** Render a welcome block with example prompts the user can click to send. */
+function renderWelcomePrompts(messagesEl) {
+    const wrap = document.createElement('div');
+    wrap.className = 'ai-welcome';
+
+    const hint = document.createElement('div');
+    hint.className = 'ai-welcome-hint';
+    hint.textContent = 'Try one of these:';
+    wrap.appendChild(hint);
+
+    for (const text of WELCOME_PROMPTS) {
+        const btn = document.createElement('button');
+        btn.type = 'button';
+        btn.className = 'ai-welcome-prompt';
+        btn.textContent = text;
+        btn.addEventListener('click', () => runExamplePrompt(text));
+        wrap.appendChild(btn);
+    }
+    messagesEl.appendChild(wrap);
+}
+
+/** Fill the input with an example prompt and send it. */
+function runExamplePrompt(text) {
+    if (isStreaming) return;
+    const input = document.getElementById('ai-input');
+    if (input) input.value = text;
+    sendAnalysis();
+}
+
+// ---- Session context snapshot ----
+
+/**
+ * Fetches the current server metrics as a pre-formatted snapshot string from
+ * /api/ollama/context and stores it on the active session. The same string is
+ * re-sent on every turn so the model sees a stable baseline.
+ * Only populates sessions of kind 'current'; chart sessions have their CSV
+ * already pinned from analyzeChartData().
+ */
+async function fetchSessionContext() {
+    const sess = getActiveSession();
+    if (!sess || sess.kind !== 'current') return;
+    try {
+        const headers = {};
+        if (state.csrfToken) headers['X-CSRF-Token'] = state.csrfToken;
+        const resp = await fetch('/api/ollama/context', { headers });
+        if (!resp.ok) return;
+        const data = await resp.json();
+        if (data.context) sess.context = data.context;
+    } catch {
+        // Leave context as the 'current' sentinel; backend calls QueryLatest().
+    }
+}
+
+// ---- Model polling ----
+
+/** Schedule the next call to pollOllamaModels after `delay` ms. */
+function scheduleModelPoll(delay) {
+    clearTimeout(modelPollTimer);
+    modelPollTimer = setTimeout(pollOllamaModels, delay);
+}
+
+/**
+ * Fetch the available models from /api/ollama/models.
+ * Reschedules itself: 30 s on success with models, 5 s on failure / empty list.
+ * Polling is paused while the panel is closed; openAIPanel() resumes it.
+ */
+async function pollOllamaModels() {
+    if (!aiPanelOpen) return; // paused while panel is closed
+    try {
+        const headers = {};
+        if (state.csrfToken) headers['X-CSRF-Token'] = state.csrfToken;
+        const resp = await fetch('/api/ollama/models', { headers });
+        if (!resp.ok) { scheduleModelPoll(5000); return; }
+        const data = await resp.json();
+        const models = data.models || [];
+        if (models.length === 0) { scheduleModelPoll(5000); return; }
+        updateModelSelector(models);
+        scheduleModelPoll(30000);
+    } catch {
+        scheduleModelPoll(5000);
+    }
+}
+
+/** Rebuild the model <select> from the given list, preserving the current selection. */
+function updateModelSelector(models) {
+    const select = document.getElementById('ai-model-select');
+    if (!select) return;
+    const current = selectedModel || ollamaModel;
+    select.innerHTML = '';
+    let found = false;
+    for (const m of models) {
+        const opt = document.createElement('option');
+        opt.value = m;
+        opt.textContent = m;
+        if (m === current) { opt.selected = true; found = true; }
+        select.appendChild(opt);
+    }
+    // If the previously selected model is no longer present, fall back to the first.
+    selectedModel = found ? current : models[0];
+    if (!found) select.value = selectedModel;
 }
 
 function attachAIButtonToCard(card) {
@@ -168,13 +397,18 @@ function toggleAIPanel() {
 function openAIPanel() {
     const panel = document.getElementById('ai-panel');
     if (!panel) return;
+    // First open in this tab lifetime: create the default current-metrics
+    // session so the user always has somewhere to type.
+    if (sessions.length === 0) {
+        createSession({ kind: 'current' });
+        fetchSessionContext();
+    }
     panel.classList.remove('hidden');
     aiPanelOpen = true;
     document.getElementById('ai-input')?.focus();
-
-    // Show model name in header
-    const modelLabel = document.getElementById('ai-model-label');
-    if (modelLabel) modelLabel.textContent = ollamaModel;
+    renderSessionsBar();
+    // Resume model polling; pollOllamaModels() bails out while aiPanelOpen is false.
+    pollOllamaModels();
 }
 
 function closeAIPanel() {
@@ -182,14 +416,88 @@ function closeAIPanel() {
     if (!panel) return;
     panel.classList.add('hidden');
     aiPanelOpen = false;
+    clearTimeout(modelPollTimer);
+}
+
+// ---- Drag to move, resize grip ----
+
+/**
+ * Wires pointer-driven drag-to-move on the panel header and drag-to-resize on
+ * a bottom-right grip. Dragging starts free-positioning the panel (overrides
+ * the default bottom/right anchoring). Interactive controls inside the header
+ * (buttons, selects) keep working — drags that start on them are ignored.
+ */
+function wirePanelDragResize() {
+    const panel = document.getElementById('ai-panel');
+    const header = panel?.querySelector('.ai-panel-header');
+    const grip = document.getElementById('ai-resize-grip');
+    if (!panel || !header || !grip) return;
+
+    header.addEventListener('pointerdown', (e) => {
+        if (e.target.closest('button, select, input, textarea')) return;
+        e.preventDefault();
+        const rect = panel.getBoundingClientRect();
+        panel.style.left = rect.left + 'px';
+        panel.style.top = rect.top + 'px';
+        panel.style.right = 'auto';
+        panel.style.bottom = 'auto';
+        const startX = e.clientX;
+        const startY = e.clientY;
+        const startLeft = rect.left;
+        const startTop = rect.top;
+        header.setPointerCapture(e.pointerId);
+        const onMove = (ev) => {
+            const newLeft = Math.max(0, Math.min(window.innerWidth - 80, startLeft + ev.clientX - startX));
+            const newTop = Math.max(0, Math.min(window.innerHeight - 40, startTop + ev.clientY - startY));
+            panel.style.left = newLeft + 'px';
+            panel.style.top = newTop + 'px';
+        };
+        const onUp = () => {
+            header.removeEventListener('pointermove', onMove);
+            header.removeEventListener('pointerup', onUp);
+            try { header.releasePointerCapture(e.pointerId); } catch (_) { /* noop */ }
+        };
+        header.addEventListener('pointermove', onMove);
+        header.addEventListener('pointerup', onUp);
+    });
+
+    grip.addEventListener('pointerdown', (e) => {
+        e.preventDefault();
+        e.stopPropagation();
+        const rect = panel.getBoundingClientRect();
+        const startX = e.clientX;
+        const startY = e.clientY;
+        const startW = rect.width;
+        const startH = rect.height;
+        grip.setPointerCapture(e.pointerId);
+        // Release max-height cap so vertical resize isn't clamped.
+        panel.style.maxHeight = 'none';
+        panel.style.maxWidth = 'none';
+        const onMove = (ev) => {
+            const w = Math.max(300, Math.min(window.innerWidth, startW + ev.clientX - startX));
+            const h = Math.max(220, Math.min(window.innerHeight, startH + ev.clientY - startY));
+            panel.style.width = w + 'px';
+            panel.style.height = h + 'px';
+        };
+        const onUp = () => {
+            grip.removeEventListener('pointermove', onMove);
+            grip.removeEventListener('pointerup', onUp);
+            try { grip.releasePointerCapture(e.pointerId); } catch (_) { /* noop */ }
+        };
+        grip.addEventListener('pointermove', onMove);
+        grip.addEventListener('pointerup', onUp);
+    });
 }
 
 // ---- Conversation ----
 
+/** Clears only the active session's history; leaves the session itself. */
 function clearConversation() {
-    conversationHistory = [];
-    const messages = document.getElementById('ai-messages');
-    if (messages) messages.innerHTML = '';
+    const sess = getActiveSession();
+    if (!sess) return;
+    sess.history = [];
+    renderMessagesForActiveSession();
+    if (sess.kind === 'current') fetchSessionContext();
 }
 
 function appendMessage(role, content, streaming = false) {
@@ -201,7 +509,7 @@ function appendMessage(role, content, streaming = false) {
 
     const label = document.createElement('div');
     label.className = 'ai-msg-label';
-    label.textContent = role === 'user' ? 'You' : '🤖 ' + ollamaModel;
+    label.textContent = role === 'user' ? 'You' : '🤖 ' + (selectedModel || ollamaModel);
 
     const body = document.createElement('div');
     body.className = 'ai-msg-body';
@@ -231,11 +539,39 @@ function renderMarkdownLite(text) {
     });
 
     // Fenced code blocks: ```lang\ncode``` (closing fence optional during streaming)
-    s = s.replace(/```(\w*)\n([\s\S]*?)(?:```|$)/g, (match, lang, code) => {
+    s = s.replace(/```(\w*)\n([\s\S]*?)(?:```|$)/g, (_, lang, code) => {
         const trimmed = code.replace(/\n$/, '');
         const cls = lang ? ` class="language-${lang}"` : '';
         return `<pre><code${cls}>${trimmed}</code></pre>`;
     });
+
+    // GFM-style pipe tables:
+    //   | h1 | h2 |
+    //   | --- | --- |
+    //   | a  | b  |
+    // Requires a leading "|" on every row and a separator row with dashes.
+    // Runs before the horizontal-rule pass so "| --- | --- |" is consumed here.
+    s = s.replace(
+        /(^|\n)(\|[^\n]+\|[ \t]*\n\|[ \t:|-]+\|[ \t]*\n(?:\|[^\n]*\|[ \t]*(?:\n|$))+)/g,
+        (_, pre, block) => {
+            const rows = block.trim().split('\n');
+            const splitCells = (row) => {
+                const trimmed = row.trim().replace(/^\||\|$/g, '');
+                return trimmed.split('|').map((c) => c.trim());
+            };
+            const header = splitCells(rows[0]);
+            let html = '<table class="ai-table"><thead><tr>';
+            for (const h of header) html += `<th>${h}</th>`;
+            html += '</tr></thead><tbody>';
+            for (let i = 2; i < rows.length; i++) {
+                html += '<tr>';
+                for (const c of splitCells(rows[i])) html += `<td>${c}</td>`;
+                html += '</tr>';
+            }
+            html += '</tbody></table>';
+            return pre + html;
+        },
+    );
 
     // Horizontal rules: ---, ***, ___
     s = s.replace(/(^|\n)([-*_]){3,}(\n|$)/g, '$1<hr>$3');
@@ -249,8 +585,8 @@ function renderMarkdownLite(text) {
     // Inline code: `code` (no newlines inside)
     s = s.replace(/`([^`\n]+)`/g, '<code>$1</code>');
 
-    // Newlines → <br>, but preserve newlines inside <pre> blocks
-    const parts = s.split(/(<pre[\s\S]*?<\/pre>)/g);
+    // Newlines → <br>, but preserve newlines inside <pre> and <table> blocks.
+    const parts = s.split(/(<pre[\s\S]*?<\/pre>|<table[\s\S]*?<\/table>)/g);
     s = parts.map((part, i) => i % 2 === 1 ? part : part.replace(/\n/g, '<br>')).join('');
 
     return s;
@@ -275,6 +611,7 @@ async function streamChatResponse({ prompt, messages, context, assistantBody }) 
             messages: messages.slice(-MAX_HISTORY),
             context,
             lang: i18n.currentLang,
+            model: selectedModel || undefined,
         }),
     });
 
@@ -287,6 +624,7 @@ async function streamChatResponse({ prompt, messages, context, assistantBody }) 
     const decoder = new TextDecoder();
     let buffer = '';
     let fullContent = '';
+    let lastEvent = '';
 
     try { // [M1] ensure reader is always released
         while (true) {
@@ -298,8 +636,29 @@ async function streamChatResponse({ prompt, messages, context, assistantBody }) 
             buffer = lines.pop(); // keep incomplete last line
 
             for (const line of lines) {
-                if (line.startsWith('event: ')) continue;
+                if (line.startsWith('event: ')) {
+                    lastEvent = line.slice(7).trim();
+                    continue;
+                }
                 if (!line.startsWith('data: ')) continue;
+
+                if (lastEvent === 'tool_call') {
+                    // Show a temporary indicator while the tool executes.
+                    if (assistantBody) {
+                        assistantBody.innerHTML = renderMarkdownLite(fullContent) +
+                            '<span class="ai-tool-call">🔧 Fetching metrics…</span>';
+                        const msgs = document.getElementById('ai-messages');
+                        if (msgs) scrollToBottom(msgs);
+                    }
+                    lastEvent = '';
+                    continue;
+                }
+                if (lastEvent === 'done' || lastEvent === 'error') {
+                    lastEvent = '';
+                    continue;
+                }
+                lastEvent = '';
+
                 const chunk = line.slice(6);
                 const decoded = chunk.replace(/\\n/g, '\n');
                 fullContent += decoded;
@@ -322,6 +681,8 @@ async function streamChatResponse({ prompt, messages, context, assistantBody }) 
 
 async function sendAnalysis() {
     if (isStreaming) return;
+    const sess = getActiveSession();
+    if (!sess) return;
 
     const inputEl = document.getElementById('ai-input');
     const prompt = (inputEl?.value || '').trim();
@@ -329,16 +690,13 @@ async function sendAnalysis() {
     // Clear input
     if (inputEl) inputEl.value = '';
 
-    // Append user message to UI
+    // Append user message to UI + active session history
     if (prompt) {
         appendMessage('user', prompt);
-        conversationHistory.push({ role: 'user', content: prompt });
-        if (conversationHistory.length > MAX_HISTORY) {
-            conversationHistory = conversationHistory.slice(-MAX_HISTORY);
-        }
+        sess.history.push({ role: 'user', content: prompt });
+        if (sess.history.length > MAX_HISTORY) sess.history = sess.history.slice(-MAX_HISTORY);
     }
 
-    const context = 'current';
     const assistantBody = appendMessage('assistant', '', true);
     isStreaming = true;
     setUIBusy(true);
@@ -346,15 +704,13 @@ async function sendAnalysis() {
     try {
         const fullContent = await streamChatResponse({
             prompt,
-            messages: conversationHistory,
-            context,
+            messages: sess.history,
+            context: sess.context,
             assistantBody,
         });
         if (fullContent) {
-            conversationHistory.push({ role: 'assistant', content: fullContent });
-            if (conversationHistory.length > MAX_HISTORY) {
-                conversationHistory = conversationHistory.slice(-MAX_HISTORY);
-            }
+            sess.history.push({ role: 'assistant', content: fullContent });
+            if (sess.history.length > MAX_HISTORY) sess.history = sess.history.slice(-MAX_HISTORY);
         }
     } catch (err) {
         if (assistantBody) {
@@ -376,21 +732,33 @@ function setUIBusy(busy) {
 }
 
 /**
- * analyzeChartData — opens the AI panel and sends a chart-scoped prompt.
+ * analyzeChartData — opens the AI panel and routes the chart into a session.
+ * If a chart session for this title already exists, resume it (no new prompt
+ * is sent — the user continues the thread). Otherwise create a fresh chart
+ * session and send the initial "Analyse this data" prompt.
  */
 export async function analyzeChartData(chartTitle, csvData) {
     if (isStreaming) return; // [H1]
+
     openAIPanel();
 
-    const prompt = `Analyse this data for ${chartTitle}.`;
-
-    appendMessage('user', prompt);
-    conversationHistory.push({ role: 'user', content: prompt });
-    if (conversationHistory.length > MAX_HISTORY) {
-        conversationHistory = conversationHistory.slice(-MAX_HISTORY);
+    const existing = sessions.find((s) => s.kind === 'chart' && s.label === chartTitle);
+    if (existing) {
+        switchSession(existing.id);
+        return;
     }
 
-    const context = `chart: ${chartTitle}\n${csvData}`;
+    // No prior thread for this chart — create one and run the opening analysis.
+    const sess = createSession({
+        label: chartTitle,
+        kind: 'chart',
+        context: `chart: ${chartTitle}\n${csvData}`,
+    });
+
+    const prompt = `Analyse this data for ${chartTitle}.`;
+    appendMessage('user', prompt);
+    sess.history.push({ role: 'user', content: prompt });
+
     const assistantBody = appendMessage('assistant', '', true);
     isStreaming = true;
     setUIBusy(true);
@@ -398,15 +766,13 @@ export async function analyzeChartData(chartTitle, csvData) {
     try {
         const fullContent = await streamChatResponse({
             prompt,
-            messages: conversationHistory,
-            context,
+            messages: sess.history,
+            context: sess.context,
             assistantBody,
         });
         if (fullContent) {
-            conversationHistory.push({ role: 'assistant', content: fullContent });
-            if (conversationHistory.length > MAX_HISTORY) {
-                conversationHistory = conversationHistory.slice(-MAX_HISTORY);
-            }
+            sess.history.push({ role: 'assistant', content: fullContent });
+            if (sess.history.length > MAX_HISTORY) sess.history = sess.history.slice(-MAX_HISTORY);
         }
     } catch (err) {
         if (assistantBody) {

@@ -443,17 +443,26 @@
     <!-- AI Assistant Panel -->
     <div id="ai-panel" class="ai-panel hidden">
         <div class="ai-panel-header">
-            <div class="ai-panel-title">🤖 AI <span id="ai-model-label" class="ai-model-label"></span></div>
+            <div class="ai-panel-title">
+                <span class="ai-panel-icon">🤖</span>
+                <select id="ai-model-select" class="ai-model-select"></select>
+            </div>
             <div class="ai-panel-actions">
-                <button id="btn-ai-clear" class="btn-ai-action" title="Clear conversation">✕ Clear</button>
+                <button id="btn-ai-clear" class="btn-ai-action" title="Clear conversation">🗑</button>
                 <button id="btn-ai-close" class="btn-ai-action" title="Close">✕</button>
             </div>
+        </div>
+        <div class="ai-sessions-bar">
+            <select id="ai-session-select" class="ai-session-select" title="Switch session"></select>
+            <button id="btn-ai-session-new" class="btn-ai-icon" title="New session">+</button>
+            <button id="btn-ai-session-delete" class="btn-ai-icon" title="Delete session">−</button>
         </div>
         <div id="ai-messages" class="ai-messages"></div>
         <div class="ai-input-row">
             <textarea id="ai-input" class="ai-input" placeholder="Ask about the metrics… (Enter to send)" rows="2" maxlength="2000"></textarea>
             <button id="btn-ai-send" class="btn-ai-send">Analyse</button>
         </div>
+        <div id="ai-resize-grip" title="Resize"></div>
     </div>
 
     <!-- Main Entry Point -->

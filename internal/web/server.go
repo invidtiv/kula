@@ -32,17 +32,18 @@ import (
 var staticFS embed.FS
 
 type Server struct {
-	cfg       config.WebConfig
-	global    config.GlobalConfig
-	collector *collector.Collector
-	store     *storage.Store
-	auth      *AuthManager
-	hub       *wsHub
-	httpSrv   *http.Server
-	templates *template.Template
-	sriHashes map[string]string
+	cfg           config.WebConfig
+	global        config.GlobalConfig
+	collector     *collector.Collector
+	store         *storage.Store
+	auth          *AuthManager
+	hub           *wsHub
+	httpSrv       *http.Server
+	templates     *template.Template
+	sriHashes     map[string]string
 	ollama        *ollamaClient
 	ollamaLimiter *chatRateLimiter
+	ollamaMetaLim *chatRateLimiter
 
 	wsMu       sync.Mutex
 	wsCount    int
@@ -51,16 +52,17 @@ type Server struct {
 
 func NewServer(cfg config.WebConfig, global config.GlobalConfig, c *collector.Collector, s *storage.Store, storageDir string, ollamaCfg config.OllamaConfig) *Server {
 	srv := &Server{
-		cfg:        cfg,
-		global:     global,
-		collector:  c,
-		store:      s,
-		auth:       NewAuthManager(cfg.Auth, storageDir, cfg.TrustProxy),
-		hub:        newWSHub(),
-		sriHashes:  make(map[string]string),
-		wsIPCounts: make(map[string]int),
+		cfg:           cfg,
+		global:        global,
+		collector:     c,
+		store:         s,
+		auth:          NewAuthManager(cfg.Auth, storageDir, cfg.TrustProxy),
+		hub:           newWSHub(),
+		sriHashes:     make(map[string]string),
+		wsIPCounts:    make(map[string]int),
 		ollama:        newOllamaClient(ollamaCfg),
 		ollamaLimiter: newChatRateLimiter(),
+		ollamaMetaLim: newMetaRateLimiter(),
 	}
 	srv.initializeTemplates()
 	srv.calculateSRIs()
@@ -157,7 +159,8 @@ func gzipMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if strings.Contains(strings.ToLower(r.Header.Get("Connection")), "upgrade") ||
 			!strings.Contains(r.Header.Get("Accept-Encoding"), "gzip") ||
-			r.Header.Get("Accept") == "text/event-stream" {
+			r.Header.Get("Accept") == "text/event-stream" ||
+			strings.HasPrefix(r.URL.Path, "/api/ollama/") {
 			next.ServeHTTP(w, r)
 			return
 		}
@@ -229,6 +232,8 @@ func (s *Server) Start() error {
 	apiMux.HandleFunc("/api/auth/status", s.handleAuthStatus)
 	apiMux.HandleFunc("/api/i18n", s.handleI18n)
 	apiMux.HandleFunc("/api/ollama/chat", s.handleOllamaChat)
+	apiMux.HandleFunc("/api/ollama/models", s.handleOllamaModels)
+	apiMux.HandleFunc("/api/ollama/context", s.handleOllamaContext)
 
 	// Wrap apiMux with logging and CSRF protection
 	loggedApiMux := s.auth.CSRFMiddleware(loggingMiddleware(s.cfg, apiMux))

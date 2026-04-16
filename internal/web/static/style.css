@@ -1339,6 +1339,32 @@ body.light-mode .focus-selecting .chart-card::after {
     border-bottom: 1px solid rgba(139, 92, 246, 0.2);
     background: rgba(139, 92, 246, 0.08);
     flex-shrink: 0;
+    cursor: move;
+    user-select: none;
+    touch-action: none;
+}
+
+#ai-resize-grip {
+    position: absolute;
+    right: 0;
+    bottom: 0;
+    width: 16px;
+    height: 16px;
+    cursor: nwse-resize;
+    background: linear-gradient(
+        135deg,
+        transparent 0,
+        transparent 45%,
+        rgba(139, 92, 246, 0.55) 45%,
+        rgba(139, 92, 246, 0.55) 55%,
+        transparent 55%,
+        transparent 75%,
+        rgba(139, 92, 246, 0.55) 75%,
+        rgba(139, 92, 246, 0.55) 85%,
+        transparent 85%
+    );
+    z-index: 2;
+    touch-action: none;
 }
 
 .ai-panel-title {
@@ -1350,11 +1376,88 @@ body.light-mode .focus-selecting .chart-card::after {
     gap: 0.4rem;
 }
 
-.ai-model-label {
+.ai-model-select {
     font-family: var(--font-mono);
     font-size: 0.75rem;
+    color: var(--text-primary);
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    border-radius: 3px;
+    padding: 0.15rem 0.4rem;
+    cursor: pointer;
+    max-width: 180px;
+    vertical-align: middle;
+    appearance: auto; /* keep the native dropdown arrow */
+}
+
+.ai-model-select option {
+    background: var(--bg-secondary);
+    color: var(--text-primary);
+}
+
+.ai-model-select:hover {
+    border-color: var(--accent-purple);
+}
+
+.ai-model-select:focus {
+    border-color: var(--accent-purple);
+    outline: none;
+}
+
+/* Sessions strip below the header. */
+.ai-sessions-bar {
+    display: flex;
+    align-items: center;
+    gap: 0.3rem;
+    padding: 0.3rem 1rem;
+    background: color-mix(in srgb, var(--accent-purple) 8%, transparent);
+    border-bottom: 1px solid color-mix(in srgb, var(--accent-purple) 20%, transparent);
+    flex-shrink: 0;
+}
+
+.ai-session-select {
+    flex: 1;
+    font-family: var(--font-mono);
+    font-size: 0.72rem;
+    color: var(--text-primary);
+    background: var(--bg-secondary);
+    border: 1px solid var(--border-color);
+    border-radius: 3px;
+    padding: 0.15rem 0.4rem;
+    cursor: pointer;
+    min-width: 0; /* allow shrinking inside flex */
+}
+
+.ai-session-select option {
+    background: var(--bg-secondary);
+    color: var(--text-primary);
+}
+
+.btn-ai-icon {
+    background: none;
+    border: 1px solid rgba(139, 92, 246, 0.25);
+    border-radius: var(--radius-sm);
     color: var(--text-muted);
-    font-weight: 400;
+    font-size: 0.9rem;
+    line-height: 1;
+    width: 1.5rem;
+    height: 1.5rem;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: all 0.15s;
+    flex-shrink: 0;
+}
+
+.btn-ai-icon:hover {
+    border-color: var(--accent-purple);
+    color: var(--accent-purple);
+}
+
+.ai-panel-icon {
+    font-size: 1rem;
+    line-height: 1;
 }
 
 .ai-panel-actions {
@@ -1367,8 +1470,13 @@ body.light-mode .focus-selecting .chart-card::after {
     border: 1px solid rgba(139, 92, 246, 0.25);
     border-radius: var(--radius-sm);
     color: var(--text-muted);
-    font-size: 0.75rem;
-    padding: 0.2rem 0.5rem;
+    font-size: 0.8rem;
+    line-height: 1;
+    width: 1.75rem;
+    height: 1.75rem;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
     cursor: pointer;
     transition: all 0.15s;
 }
@@ -1406,6 +1514,43 @@ body.light-mode .focus-selecting .chart-card::after {
     flex-direction: column;
     gap: 0.2rem;
     animation: fadeInUp 0.15s ease;
+}
+
+.ai-welcome {
+    display: flex;
+    flex-direction: column;
+    gap: 0.4rem;
+    padding: 0.5rem 0.2rem;
+    animation: fadeInUp 0.2s ease;
+}
+
+.ai-welcome-hint {
+    font-size: 0.75rem;
+    color: var(--text-secondary);
+    opacity: 0.8;
+    margin-bottom: 0.2rem;
+}
+
+.ai-welcome-prompt {
+    text-align: left;
+    font: inherit;
+    font-size: 0.82rem;
+    color: var(--text-primary);
+    background: rgba(139, 92, 246, 0.08);
+    border: 1px solid rgba(139, 92, 246, 0.25);
+    border-radius: 6px;
+    padding: 0.5rem 0.7rem;
+    cursor: pointer;
+    transition: background 0.12s ease, border-color 0.12s ease, transform 0.08s ease;
+}
+
+.ai-welcome-prompt:hover {
+    background: rgba(139, 92, 246, 0.18);
+    border-color: rgba(139, 92, 246, 0.5);
+}
+
+.ai-welcome-prompt:active {
+    transform: translateY(1px);
 }
 
 .ai-msg-label {
@@ -1475,6 +1620,33 @@ body.light-mode .focus-selecting .chart-card::after {
     margin: 0.5em 0;
 }
 
+.ai-table {
+    border-collapse: collapse;
+    margin: 0.5em 0;
+    font-size: 0.85em;
+    max-width: 100%;
+    display: block;
+    overflow-x: auto;
+}
+
+.ai-table th,
+.ai-table td {
+    border: 1px solid rgba(139, 92, 246, 0.25);
+    padding: 0.25rem 0.5rem;
+    text-align: left;
+    white-space: nowrap;
+}
+
+.ai-table th {
+    background: rgba(139, 92, 246, 0.12);
+    color: var(--accent-purple);
+    font-weight: 600;
+}
+
+.ai-table tr:nth-child(even) td {
+    background: rgba(139, 92, 246, 0.04);
+}
+
 .ai-think {
     font-style: italic;
     color: var(--text-muted, rgba(255, 255, 255, 0.5));
@@ -1488,6 +1660,14 @@ body.light-mode .focus-selecting .chart-card::after {
 .ai-error {
     color: var(--accent-red);
     font-size: 0.8rem;
+}
+
+.ai-tool-call {
+    display: inline-block;
+    margin-top: 0.4rem;
+    font-size: 0.78rem;
+    color: var(--text-muted);
+    opacity: 0.8;
 }
 
 /* Typing cursor */
