@@ -129,8 +129,8 @@
                 <!-- AI Assistant -->
                 <button id="btn-ai" class="btn-icon hidden" title="AI">🤖</button>
                 <!-- Game easter egg -->
-                <a href="/game.html" class="btn-icon btn-game" data-i18n-title="space_invaders" title="Space Invaders"
-                    id="btn-game">🎮</a>
+                {{if .EasterEgg}}<a href="/game.html" class="btn-icon btn-game" data-i18n-title="space_invaders" title="Space Invaders"
+                    id="btn-game">🎮</a>{{end}}
                 <!-- Layout toggle -->
                 <button id="btn-layout" class="btn-icon" data-i18n-title="switch_list"
                     title="Switch to list layout">⊞</button>

@@ -18,6 +18,8 @@ global:
   show_version: true
   # Default theme for the web UI: light, dark, or auto (default: auto)
   default_theme: auto
+  # Show the Space Invaders easter egg button in the web UI (default: true)
+  easter_egg: true
 
 # Data collection settings
 collection:

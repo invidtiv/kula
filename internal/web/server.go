@@ -262,14 +262,16 @@ func (s *Server) Start() error {
 		// Templated HTML files
 		mux.HandleFunc("/", s.handleIndex)
 		mux.HandleFunc("/index.html", s.handleIndex)
-		mux.HandleFunc("/game.html", s.handleGame)
+		if s.global.EasterEgg {
+			mux.HandleFunc("/game.html", s.handleGame)
+			mux.HandleFunc("/game.css", s.handleStatic)
+			mux.HandleFunc("/game.js", s.handleStatic)
+		}
 
 		// Static assets handler
 		mux.HandleFunc("/js/", s.handleStatic)
 		mux.HandleFunc("/fonts/", s.handleStatic)
 		mux.HandleFunc("/style.css", s.handleStatic)
-		mux.HandleFunc("/game.css", s.handleStatic)
-		mux.HandleFunc("/game.js", s.handleStatic)
 		mux.HandleFunc("/kula.svg", s.handleStatic)
 		mux.HandleFunc("/favicon.ico", s.handleStatic)
 
@@ -835,6 +837,10 @@ func (s *Server) handleStatic(w http.ResponseWriter, r *http.Request) {
 		s.handleIndex(w, r)
 		return
 	}
+	if !s.global.EasterEgg && (path == "game.html" || path == "game.css" || path == "game.js") {
+		http.Error(w, "Not Found", http.StatusNotFound)
+		return
+	}
 
 	fullPath := "static/" + path
 
@@ -899,11 +905,13 @@ func (s *Server) renderTemplate(w http.ResponseWriter, r *http.Request, template
 		SRI         map[string]string
 		AuthEnabled bool
 		LangForce   bool
+		EasterEgg   bool
 	}{
 		Nonce:       nonce,
 		SRI:         s.sriHashes,
 		AuthEnabled: s.cfg.Auth.Enabled,
 		LangForce:   s.cfg.Lang.Force,
+		EasterEgg:   s.global.EasterEgg,
 	}
 
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")

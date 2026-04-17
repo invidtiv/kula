@@ -27,6 +27,7 @@ type GlobalConfig struct {
 	ShowSystemInfo bool   `yaml:"show_system_info"`
 	ShowVersion    bool   `yaml:"show_version"`
 	DefaultTheme   string `yaml:"default_theme"`
+	EasterEgg      bool   `yaml:"easter_egg"`
 }
 
 type CollectionConfig struct {
@@ -204,6 +205,7 @@ func DefaultConfig() *Config {
 			ShowSystemInfo: true,
 			ShowVersion:    true,
 			DefaultTheme:   "auto",
+			EasterEgg:      true,
 		},
 		Collection: CollectionConfig{
 			Interval:        time.Second,
