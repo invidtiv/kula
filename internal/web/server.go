@@ -96,6 +96,9 @@ func (w *statusResponseWriter) Flush() {
 	}
 }
 
+// Unwrap lets http.NewResponseController traverse the middleware chain (e.g. to set write deadlines).
+func (w *statusResponseWriter) Unwrap() http.ResponseWriter { return w.ResponseWriter }
+
 // Hijack exposes the underlying http.Hijacker to allow WebSockets to upgrade the connection.
 func (w *statusResponseWriter) Hijack() (net.Conn, *bufio.ReadWriter, error) {
 	h, ok := w.ResponseWriter.(http.Hijacker)
@@ -144,6 +147,9 @@ func (w *gzipResponseWriter) Write(b []byte) (int, error) {
 	}
 	return w.Writer.Write(b)
 }
+
+// Unwrap lets http.NewResponseController traverse the middleware chain (e.g. to set write deadlines).
+func (w *gzipResponseWriter) Unwrap() http.ResponseWriter { return w.ResponseWriter }
 
 // Flush implements the http.Flusher interface to support streaming inside compressed responses.
 func (w *gzipResponseWriter) Flush() {
