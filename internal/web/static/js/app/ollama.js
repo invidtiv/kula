@@ -26,6 +26,8 @@ let nextSessionId = 1;
 // ---- Model selection ----
 let selectedModel = '';     // currently selected model name (sent with each request)
 let modelPollTimer = null;  // setTimeout handle for the next models poll
+let serviceAvailable = true;
+let pendingChartAnalysis = null; // { chartTitle, csvData } queued while service is down
 
 // ---- Init ----
 
@@ -261,14 +263,33 @@ async function pollOllamaModels() {
         const headers = {};
         if (state.csrfToken) headers['X-CSRF-Token'] = state.csrfToken;
         const resp = await fetch('/api/ollama/models', { headers });
-        if (!resp.ok) { scheduleModelPoll(5000); return; }
+        if (!resp.ok) { setServiceAvailable(false); scheduleModelPoll(5000); return; }
         const data = await resp.json();
         const models = data.models || [];
-        if (models.length === 0) { scheduleModelPoll(5000); return; }
+        if (models.length === 0) { setServiceAvailable(false); scheduleModelPoll(5000); return; }
+        setServiceAvailable(true);
         updateModelSelector(models);
         scheduleModelPoll(30000);
     } catch {
+        setServiceAvailable(false);
         scheduleModelPoll(5000);
+    }
+}
+
+function setServiceAvailable(ok) {
+    if (serviceAvailable === ok) return;
+    serviceAvailable = ok;
+    const banner = document.getElementById('ai-status-banner');
+    if (banner) banner.classList.toggle('hidden', ok);
+    if (ok) {
+        if (pendingChartAnalysis) {
+            const { chartTitle, csvData } = pendingChartAnalysis;
+            pendingChartAnalysis = null;
+            analyzeChartData(chartTitle, csvData);
+        } else {
+            const inputEl = document.getElementById('ai-input');
+            if (inputEl?.value.trim()) sendAnalysis();
+        }
     }
 }
 
@@ -380,6 +401,12 @@ function extractAndAnalyzeChart(chart, title) {
         csv += row.join(',') + '\n';
     });
 
+    const chartI18nKey = chart.canvas.closest('.chart-card')?.querySelector('h3[data-i18n]')?.dataset.i18n;
+    if (chartI18nKey === 'load_average') {
+        const numCores = state.lastSample?.cpu?.num_cores;
+        if (numCores) csv = `# System has ${numCores} logical CPU cores (load = cores means fully utilized)\n` + csv;
+    }
+
     // [H2] catch unhandled rejection
     analyzeChartData(title, csv).catch(err => console.error('[AI] chart analysis error:', err));
 }
@@ -486,6 +513,17 @@ function wirePanelDragResize() {
         };
         grip.addEventListener('pointermove', onMove);
         grip.addEventListener('pointerup', onUp);
+    });
+
+    window.addEventListener('resize', () => {
+        if (!aiPanelOpen) return;
+        const rect = panel.getBoundingClientRect();
+        if (rect.right > window.innerWidth || rect.bottom > window.innerHeight || rect.left < 0 || rect.top < 0) {
+            panel.style.left = '';
+            panel.style.top = '';
+            panel.style.right = '1.5rem';
+            panel.style.bottom = '1.5rem';
+        }
     });
 }
 
@@ -653,9 +691,14 @@ async function streamChatResponse({ prompt, messages, context, assistantBody }) 
                     lastEvent = '';
                     continue;
                 }
-                if (lastEvent === 'done' || lastEvent === 'error') {
+                if (lastEvent === 'done') {
                     lastEvent = '';
-                    continue;
+                    break;
+                }
+                if (lastEvent === 'error') {
+                    const msg = line.slice(6) || 'stream error';
+                    lastEvent = '';
+                    throw new Error(msg);
                 }
                 lastEvent = '';
 
@@ -681,6 +724,7 @@ async function streamChatResponse({ prompt, messages, context, assistantBody }) 
 
 async function sendAnalysis() {
     if (isStreaming) return;
+    if (!serviceAvailable) return;
     const sess = getActiveSession();
     if (!sess) return;
 
@@ -742,18 +786,24 @@ export async function analyzeChartData(chartTitle, csvData) {
 
     openAIPanel();
 
-    const existing = sessions.find((s) => s.kind === 'chart' && s.label === chartTitle);
-    if (existing) {
-        switchSession(existing.id);
+    if (!serviceAvailable) {
+        pendingChartAnalysis = { chartTitle, csvData };
         return;
     }
 
-    // No prior thread for this chart — create one and run the opening analysis.
-    const sess = createSession({
-        label: chartTitle,
-        kind: 'chart',
-        context: `chart: ${chartTitle}\n${csvData}`,
-    });
+    const existing = sessions.find((s) => s.kind === 'chart' && s.label === chartTitle);
+    let sess;
+    if (existing) {
+        switchSession(existing.id);
+        sess = existing;
+        sess.context = `chart: ${chartTitle}\n${csvData}`;
+    } else {
+        sess = createSession({
+            label: chartTitle,
+            kind: 'chart',
+            context: `chart: ${chartTitle}\n${csvData}`,
+        });
+    }
 
     const prompt = `Analyse this data for ${chartTitle}.`;
     appendMessage('user', prompt);

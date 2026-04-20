@@ -1317,7 +1317,8 @@ body.light-mode .focus-selecting .chart-card::after {
     right: 1.5rem;
     width: 420px;
     max-width: calc(100vw - 2rem);
-    max-height: 70vh;
+    height: 65vh;
+    max-height: 80vh;
     display: flex;
     flex-direction: column;
     background: rgba(13, 18, 30, 0.92);
@@ -1365,6 +1366,36 @@ body.light-mode .focus-selecting .chart-card::after {
     );
     z-index: 2;
     touch-action: none;
+}
+
+.ai-status-banner {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    padding: 0.45rem 1rem;
+    background: rgba(239, 68, 68, 0.1);
+    border-bottom: 1px solid rgba(239, 68, 68, 0.25);
+    font-size: 0.78rem;
+    color: rgba(239, 68, 68, 0.85);
+    flex-shrink: 0;
+}
+
+.ai-status-banner.hidden {
+    display: none;
+}
+
+.ai-status-spinner {
+    width: 11px;
+    height: 11px;
+    border: 2px solid rgba(239, 68, 68, 0.25);
+    border-top-color: rgba(239, 68, 68, 0.85);
+    border-radius: 50%;
+    animation: ai-spin 0.8s linear infinite;
+    flex-shrink: 0;
+}
+
+@keyframes ai-spin {
+    to { transform: rotate(360deg); }
 }
 
 .ai-panel-title {
