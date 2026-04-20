@@ -127,7 +127,7 @@
                 <!-- Focus mode -->
                 <button id="btn-focus" class="btn-icon" data-i18n-title="focus_mode" title="Focus mode">🎯</button>
                 <!-- AI Assistant -->
-                <button id="btn-ai" class="btn-icon hidden" title="AI">🤖</button>
+                <button id="btn-ai" class="btn-icon hidden" data-i18n-title="ai_assistant" title="AI Assistant">🤖</button>
                 <!-- Game easter egg -->
                 {{if .EasterEgg}}<a href="/game.html" class="btn-icon btn-game" data-i18n-title="space_invaders" title="Space Invaders"
                     id="btn-game">🎮</a>{{end}}
@@ -448,25 +448,25 @@
                 <select id="ai-model-select" class="ai-model-select"></select>
             </div>
             <div class="ai-panel-actions">
-                <button id="btn-ai-clear" class="btn-ai-action" title="Clear conversation">🗑</button>
-                <button id="btn-ai-close" class="btn-ai-action" title="Close">✕</button>
+                <button id="btn-ai-clear" class="btn-ai-action" data-i18n-title="ai_clear_conversation" title="Clear conversation">🗑</button>
+                <button id="btn-ai-close" class="btn-ai-action" data-i18n-title="ai_close" title="Close">✕</button>
             </div>
         </div>
         <div class="ai-sessions-bar">
-            <select id="ai-session-select" class="ai-session-select" title="Switch session"></select>
-            <button id="btn-ai-session-new" class="btn-ai-icon" title="New session">+</button>
-            <button id="btn-ai-session-delete" class="btn-ai-icon" title="Delete session">−</button>
+            <select id="ai-session-select" class="ai-session-select" data-i18n-title="ai_switch_session" title="Switch session"></select>
+            <button id="btn-ai-session-new" class="btn-ai-icon" data-i18n-title="ai_new_session" title="New session">+</button>
+            <button id="btn-ai-session-delete" class="btn-ai-icon" data-i18n-title="ai_delete_session" title="Delete session">−</button>
         </div>
         <div id="ai-status-banner" class="ai-status-banner hidden">
             <span class="ai-status-spinner"></span>
-            <span>AI assistant unavailable, retrying…</span>
+            <span data-i18n="ai_unavailable">AI assistant unavailable, retrying…</span>
         </div>
         <div id="ai-messages" class="ai-messages"></div>
         <div class="ai-input-row">
-            <textarea id="ai-input" class="ai-input" placeholder="Ask about the metrics… (Enter to send)" rows="2" maxlength="2000"></textarea>
-            <button id="btn-ai-send" class="btn-ai-send">Analyse</button>
+            <textarea id="ai-input" class="ai-input" data-i18n-placeholder="ai_input_placeholder" placeholder="Ask about the metrics… (Enter to send)" rows="2" maxlength="2000"></textarea>
+            <button id="btn-ai-send" class="btn-ai-send" data-i18n="ai_analyse">Analyse</button>
         </div>
-        <div id="ai-resize-grip" title="Resize"></div>
+        <div id="ai-resize-grip" data-i18n-title="ai_resize" title="Resize"></div>
     </div>
 
     <!-- Main Entry Point -->

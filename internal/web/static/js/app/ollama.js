@@ -68,7 +68,7 @@ export function initOllama(cfg) {
         if (isStreaming) return;
         const sess = getActiveSession();
         if (!sess || sess.history.length === 0) return;
-        if (!confirm('Clear all messages in this session?')) return;
+        if (!confirm(i18n.t('ai_confirm_clear'))) return;
         clearConversation();
     });
     document.getElementById('btn-ai-session-new')?.addEventListener('click', () => {
@@ -79,7 +79,7 @@ export function initOllama(cfg) {
         if (isStreaming) return;
         const sess = getActiveSession();
         if (!sess) return;
-        if (!confirm(`Delete session "${sess.label}"?`)) return;
+        if (!confirm(i18n.t('ai_confirm_delete_session'))) return;
         deleteSession(sess.id);
     });
     document.getElementById('ai-session-select')?.addEventListener('change', (e) => {
@@ -185,12 +185,6 @@ function renderMessagesForActiveSession() {
     for (const m of sess.history) appendMessage(m.role, m.content, false);
 }
 
-const WELCOME_PROMPTS = [
-    'What is the current status?',
-    'Check server load over the last 5 minutes.',
-    'How many network interfaces do we monitor?',
-];
-
 /** Render a welcome block with example prompts the user can click to send. */
 function renderWelcomePrompts(messagesEl) {
     const wrap = document.createElement('div');
@@ -198,10 +192,10 @@ function renderWelcomePrompts(messagesEl) {
 
     const hint = document.createElement('div');
     hint.className = 'ai-welcome-hint';
-    hint.textContent = 'Try one of these:';
+    hint.textContent = i18n.t('ai_try_prompts');
     wrap.appendChild(hint);
 
-    for (const text of WELCOME_PROMPTS) {
+    for (const text of [i18n.t('ai_prompt_status'), i18n.t('ai_prompt_load'), i18n.t('ai_prompt_network')]) {
         const btn = document.createElement('button');
         btn.type = 'button';
         btn.className = 'ai-welcome-prompt';
@@ -771,7 +765,7 @@ function setUIBusy(busy) {
     const btn = document.getElementById('btn-ai-send');
     if (btn) {
         btn.disabled = busy;
-        btn.textContent = busy ? '…' : 'Analyse';
+        btn.textContent = busy ? '…' : i18n.t('ai_analyse');
     }
 }
 
@@ -805,7 +799,7 @@ export async function analyzeChartData(chartTitle, csvData) {
         });
     }
 
-    const prompt = `Analyse this data for ${chartTitle}.`;
+    const prompt = i18n.t('ai_analyse_prompt').replace('{title}', chartTitle);
     appendMessage('user', prompt);
     sess.history.push({ role: 'user', content: prompt });
 

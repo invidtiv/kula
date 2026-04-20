@@ -111,5 +111,22 @@
     "no_swap": "swap nenastaven",
     "no_gpus": "žádné GPU nebylo nalezeno",
     "collecting_data": "probíhá sběr dat…",
-    "clock": "hodiny"
+    "clock": "hodiny",
+    "ai_assistant": "AI asistent",
+    "ai_clear_conversation": "Vymazat konverzaci",
+    "ai_close": "Zavřít",
+    "ai_switch_session": "Přepnout relaci",
+    "ai_new_session": "Nová relace",
+    "ai_delete_session": "Smazat relaci",
+    "ai_input_placeholder": "Zeptejte se na metriky… (Enter pro odeslání)",
+    "ai_analyse": "Analyzovat",
+    "ai_unavailable": "AI asistent není dostupný, opakuji pokus…",
+    "ai_resize": "Změnit velikost",
+    "ai_confirm_clear": "Vymazat všechny zprávy v této relaci?",
+    "ai_confirm_delete_session": "Smazat tuto relaci?",
+    "ai_try_prompts": "Zkuste jeden z těchto:",
+    "ai_prompt_status": "Jaký je aktuální stav?",
+    "ai_prompt_load": "Zkontrolujte zatížení serveru za posledních 5 minut.",
+    "ai_prompt_network": "Kolik síťových rozhraní sledujeme?",
+    "ai_analyse_prompt": "Analyzujte tato data pro {title}."
 }

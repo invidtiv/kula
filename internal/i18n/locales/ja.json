@@ -111,5 +111,22 @@
     "no_swap": "スワップ未設定",
     "no_gpus": "GPUが検出されませんでした",
     "collecting_data": "データ収集中…",
-    "clock": "時計"
+    "clock": "時計",
+    "ai_assistant": "AIアシスタント",
+    "ai_clear_conversation": "会話を削除",
+    "ai_close": "閉じる",
+    "ai_switch_session": "セッションを切り替え",
+    "ai_new_session": "新しいセッション",
+    "ai_delete_session": "セッションを削除",
+    "ai_input_placeholder": "メトリクスについて質問… (Enterで送信)",
+    "ai_analyse": "分析",
+    "ai_unavailable": "AIアシスタントが利用不可、再試行中…",
+    "ai_resize": "サイズ変更",
+    "ai_confirm_clear": "このセッションのすべてのメッセージを削除しますか？",
+    "ai_confirm_delete_session": "このセッションを削除しますか？",
+    "ai_try_prompts": "これらのいずれかを試してください：",
+    "ai_prompt_status": "現在の状態は何ですか？",
+    "ai_prompt_load": "過去5分間のサーバー負荷を確認してください。",
+    "ai_prompt_network": "いくつのネットワークインターフェースを監視していますか？",
+    "ai_analyse_prompt": "{title} のデータを分析してください。"
 }

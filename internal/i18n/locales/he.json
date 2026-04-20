@@ -111,5 +111,22 @@
     "no_swap": "לא הוגדר זיכרון וירטואלי",
     "no_gpus": "לא זוהו מעבדים גרפיים",
     "collecting_data": "אוסף נתונים…",
-    "clock": "שעון"
+    "clock": "שעון",
+    "ai_assistant": "עוזר בינה מלאכותית",
+    "ai_clear_conversation": "נקה שיחה",
+    "ai_close": "סגור",
+    "ai_switch_session": "החלף סשן",
+    "ai_new_session": "סשן חדש",
+    "ai_delete_session": "מחק סשן",
+    "ai_input_placeholder": "שאל על המדדים… (Enter לשליחה)",
+    "ai_analyse": "נתח",
+    "ai_unavailable": "עוזר הבינה המלאכותית אינו זמין, מנסה שוב…",
+    "ai_resize": "שנה גודל",
+    "ai_confirm_clear": "למחוק את כל ההודעות בסשן זה?",
+    "ai_confirm_delete_session": "למחוק את הסשן הזה?",
+    "ai_try_prompts": "נסה אחת מאלה:",
+    "ai_prompt_status": "מה הסטטוס הנוכחי?",
+    "ai_prompt_load": "בדוק את עומס השרת ב-5 הדקות האחרונות.",
+    "ai_prompt_network": "כמה ממשקי רשת אנו מנטרים?",
+    "ai_analyse_prompt": "נתח את הנתונים עבור {title}."
 }

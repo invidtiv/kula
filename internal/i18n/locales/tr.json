@@ -111,5 +111,22 @@
     "no_swap": "swap yapılandırılmamış",
     "no_gpus": "GPU bulunamadı",
     "collecting_data": "veri toplanıyor…",
-    "clock": "saat"
+    "clock": "saat",
+    "ai_assistant": "YZ Asistanı",
+    "ai_clear_conversation": "Konuşmayı temizle",
+    "ai_close": "Kapat",
+    "ai_switch_session": "Oturumu değiştir",
+    "ai_new_session": "Yeni oturum",
+    "ai_delete_session": "Oturumu sil",
+    "ai_input_placeholder": "Metrikler hakkında sorun… (Göndermek için Enter)",
+    "ai_analyse": "Analiz et",
+    "ai_unavailable": "YZ asistanı kullanılamıyor, yeniden deneniyor…",
+    "ai_resize": "Yeniden boyutlandır",
+    "ai_confirm_clear": "Bu oturumdaki tüm mesajlar silinsin mi?",
+    "ai_confirm_delete_session": "Bu oturum silinsin mi?",
+    "ai_try_prompts": "Bunlardan birini deneyin:",
+    "ai_prompt_status": "Mevcut durum nedir?",
+    "ai_prompt_load": "Son 5 dakikadaki sunucu yükünü kontrol edin.",
+    "ai_prompt_network": "Kaç ağ arabirimini izliyoruz?",
+    "ai_analyse_prompt": "{title} için bu verileri analiz edin."
 }

@@ -111,5 +111,22 @@
     "no_swap": "swap neconfigurat",
     "no_gpus": "nicio GPU detectată",
     "collecting_data": "se colectează datele…",
-    "clock": "ceas"
+    "clock": "ceas",
+    "ai_assistant": "Asistent AI",
+    "ai_clear_conversation": "Șterge conversația",
+    "ai_close": "Închide",
+    "ai_switch_session": "Schimbă sesiunea",
+    "ai_new_session": "Sesiune nouă",
+    "ai_delete_session": "Șterge sesiunea",
+    "ai_input_placeholder": "Întreabă despre metrici… (Enter pentru trimitere)",
+    "ai_analyse": "Analizează",
+    "ai_unavailable": "Asistentul AI nu este disponibil, se reîncearcă…",
+    "ai_resize": "Redimensionează",
+    "ai_confirm_clear": "Șterge toate mesajele din această sesiune?",
+    "ai_confirm_delete_session": "Șterge această sesiune?",
+    "ai_try_prompts": "Încearcă unul dintre acestea:",
+    "ai_prompt_status": "Care este starea actuală?",
+    "ai_prompt_load": "Verifică încărcarea serverului în ultimele 5 minute.",
+    "ai_prompt_network": "Câte interfețe de rețea monitorizăm?",
+    "ai_analyse_prompt": "Analizează aceste date pentru {title}."
 }

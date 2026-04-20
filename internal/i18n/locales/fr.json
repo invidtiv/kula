@@ -111,5 +111,22 @@
     "no_swap": "pas de swap configuré",
     "no_gpus": "aucune GPU détectée",
     "collecting_data": "collecte des données…",
-    "clock": "horloge"
+    "clock": "horloge",
+    "ai_assistant": "Assistant IA",
+    "ai_clear_conversation": "Effacer la conversation",
+    "ai_close": "Fermer",
+    "ai_switch_session": "Changer de session",
+    "ai_new_session": "Nouvelle session",
+    "ai_delete_session": "Supprimer la session",
+    "ai_input_placeholder": "Poser une question sur les métriques… (Entrée pour envoyer)",
+    "ai_analyse": "Analyser",
+    "ai_unavailable": "Assistant IA indisponible, nouvelle tentative…",
+    "ai_resize": "Redimensionner",
+    "ai_confirm_clear": "Effacer tous les messages de cette session ?",
+    "ai_confirm_delete_session": "Supprimer cette session ?",
+    "ai_try_prompts": "Essayez l'une de ces options :",
+    "ai_prompt_status": "Quel est l'état actuel ?",
+    "ai_prompt_load": "Vérifier la charge du serveur au cours des 5 dernières minutes.",
+    "ai_prompt_network": "Combien d'interfaces réseau surveillons-nous ?",
+    "ai_analyse_prompt": "Analysez ces données pour {title}."
 }

@@ -111,5 +111,22 @@
     "no_swap": "कोई स्वैप कॉन्फ़िगर नहीं",
     "no_gpus": "कोई GPU नहीं मिला",
     "collecting_data": "डेटा एकत्र किया जा रहा है…",
-    "clock": "घड़ी"
+    "clock": "घड़ी",
+    "ai_assistant": "AI सहायक",
+    "ai_clear_conversation": "बातचीत साफ़ करें",
+    "ai_close": "बंद करें",
+    "ai_switch_session": "सत्र बदलें",
+    "ai_new_session": "नया सत्र",
+    "ai_delete_session": "सत्र हटाएं",
+    "ai_input_placeholder": "मेट्रिक्स के बारे में पूछें… (भेजने के लिए Enter दबाएं)",
+    "ai_analyse": "विश्लेषण",
+    "ai_unavailable": "AI सहायक अनुपलब्ध है, पुनः प्रयास हो रहा है…",
+    "ai_resize": "आकार बदलें",
+    "ai_confirm_clear": "इस सत्र के सभी संदेश हटाएं?",
+    "ai_confirm_delete_session": "यह सत्र हटाएं?",
+    "ai_try_prompts": "इनमें से एक आज़माएं:",
+    "ai_prompt_status": "वर्तमान स्थिति क्या है?",
+    "ai_prompt_load": "पिछले 5 मिनट में सर्वर लोड जांचें।",
+    "ai_prompt_network": "हम कितने नेटवर्क इंटरफेस मॉनिटर करते हैं?",
+    "ai_analyse_prompt": "{title} के लिए इस डेटा का विश्लेषण करें।"
 }

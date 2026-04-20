@@ -111,5 +111,22 @@
     "no_swap": "لم يتم تكوين التبديل",
     "no_gpus": "لم يتم اكتشاف معالجات رسومات",
     "collecting_data": "جارٍ جمع البيانات…",
-    "clock": "الساعة"
+    "clock": "الساعة",
+    "ai_assistant": "مساعد الذكاء الاصطناعي",
+    "ai_clear_conversation": "مسح المحادثة",
+    "ai_close": "إغلاق",
+    "ai_switch_session": "تبديل الجلسة",
+    "ai_new_session": "جلسة جديدة",
+    "ai_delete_session": "حذف الجلسة",
+    "ai_input_placeholder": "اسأل عن المقاييس… (Enter للإرسال)",
+    "ai_analyse": "تحليل",
+    "ai_unavailable": "مساعد الذكاء الاصطناعي غير متاح، يعيد المحاولة…",
+    "ai_resize": "تغيير الحجم",
+    "ai_confirm_clear": "مسح جميع الرسائل في هذه الجلسة؟",
+    "ai_confirm_delete_session": "حذف هذه الجلسة؟",
+    "ai_try_prompts": "جرب أحد هذه:",
+    "ai_prompt_status": "ما الحالة الحالية؟",
+    "ai_prompt_load": "تحقق من حمل الخادم خلال آخر 5 دقائق.",
+    "ai_prompt_network": "كم عدد واجهات الشبكة التي نراقبها؟",
+    "ai_analyse_prompt": "حلل هذه البيانات لـ {title}."
 }

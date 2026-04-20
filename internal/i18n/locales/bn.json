@@ -111,5 +111,22 @@
     "no_swap": "কোন সোয়াপ কনফিগার করা নেই",
     "no_gpus": "কোন জিপিইউ সনাক্ত করা যায়নি",
     "collecting_data": "তথ্য সংগ্রহ করা হচ্ছে…",
-    "clock": "ঘড়ি"
+    "clock": "ঘড়ি",
+    "ai_assistant": "এআই সহায়তাকারী",
+    "ai_clear_conversation": "কথোপকথন মুছুন",
+    "ai_close": "বন্ধ করুন",
+    "ai_switch_session": "সেশন পরিবর্তন করুন",
+    "ai_new_session": "নতুন সেশন",
+    "ai_delete_session": "সেশন মুছুন",
+    "ai_input_placeholder": "মেট্রিক্স সম্পর্কে জিজ্ঞাসা করুন… (পাঠাতে Enter চাপুন)",
+    "ai_analyse": "বিশ্লেষণ",
+    "ai_unavailable": "এআই সহায়তাকারী অনুপলব্ধ, পুনরায় চেষ্টা করছে…",
+    "ai_resize": "আকার পরিবর্তন করুন",
+    "ai_confirm_clear": "এই সেশনের সব বার্তা মুছবেন?",
+    "ai_confirm_delete_session": "এই সেশন মুছবেন?",
+    "ai_try_prompts": "এর মধ্যে একটি চেষ্টা করুন:",
+    "ai_prompt_status": "বর্তমান অবস্থা কী?",
+    "ai_prompt_load": "গত ৫ মিনিটে সার্ভার লোড পরীক্ষা করুন।",
+    "ai_prompt_network": "আমরা কতটি নেটওয়ার্ক ইন্টারফেস পর্যবেক্ষণ করি?",
+    "ai_analyse_prompt": "{title} এর জন্য এই ডেটা বিশ্লেষণ করুন।"
 }

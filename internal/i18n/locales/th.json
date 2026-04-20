@@ -111,5 +111,22 @@
     "no_swap": "ไม่ได้กำหนดค่า swap",
     "no_gpus": "ไม่พบ GPU",
     "collecting_data": "กำลังรวบรวมข้อมูล…",
-    "clock": "นาฬิกา"
+    "clock": "นาฬิกา",
+    "ai_assistant": "ผู้ช่วย AI",
+    "ai_clear_conversation": "ล้างการสนทนา",
+    "ai_close": "ปิด",
+    "ai_switch_session": "เปลี่ยนเซสชัน",
+    "ai_new_session": "เซสชันใหม่",
+    "ai_delete_session": "ลบเซสชัน",
+    "ai_input_placeholder": "ถามเกี่ยวกับเมตริก… (Enter เพื่อส่ง)",
+    "ai_analyse": "วิเคราะห์",
+    "ai_unavailable": "ผู้ช่วย AI ไม่พร้อมใช้งาน กำลังลองใหม่…",
+    "ai_resize": "ปรับขนาด",
+    "ai_confirm_clear": "ลบข้อความทั้งหมดในเซสชันนี้?",
+    "ai_confirm_delete_session": "ลบเซสชันนี้?",
+    "ai_try_prompts": "ลองอันใดอันหนึ่งต่อไปนี้:",
+    "ai_prompt_status": "สถานะปัจจุบันคืออะไร?",
+    "ai_prompt_load": "ตรวจสอบโหลดเซิร์ฟเวอร์ใน 5 นาทีที่ผ่านมา",
+    "ai_prompt_network": "เราตรวจสอบอินเทอร์เฟซเครือข่ายกี่อัน?",
+    "ai_analyse_prompt": "วิเคราะห์ข้อมูลนี้สำหรับ {title}"
 }

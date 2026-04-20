@@ -111,5 +111,22 @@
     "no_swap": "swap не налаштовано",
     "no_gpus": "GPU не виявлено",
     "collecting_data": "збір даних…",
-    "clock": "годинник"
+    "clock": "годинник",
+    "ai_assistant": "ШІ-асистент",
+    "ai_clear_conversation": "Очистити розмову",
+    "ai_close": "Закрити",
+    "ai_switch_session": "Переключити сесію",
+    "ai_new_session": "Нова сесія",
+    "ai_delete_session": "Видалити сесію",
+    "ai_input_placeholder": "Запитайте про метрики… (Enter для надсилання)",
+    "ai_analyse": "Аналізувати",
+    "ai_unavailable": "ШІ-асистент недоступний, повтор спроби…",
+    "ai_resize": "Змінити розмір",
+    "ai_confirm_clear": "Видалити всі повідомлення в цій сесії?",
+    "ai_confirm_delete_session": "Видалити цю сесію?",
+    "ai_try_prompts": "Спробуйте одне з таких:",
+    "ai_prompt_status": "Який поточний статус?",
+    "ai_prompt_load": "Перевірте навантаження сервера за останні 5 хвилин.",
+    "ai_prompt_network": "Скільки мережевих інтерфейсів ми відстежуємо?",
+    "ai_analyse_prompt": "Проаналізуйте ці дані для {title}."
 }

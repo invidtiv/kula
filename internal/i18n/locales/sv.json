@@ -111,5 +111,22 @@
     "no_swap": "swap ej konfigurerad",
     "no_gpus": "inga GPU:er hittades",
     "collecting_data": "samlar in data…",
-    "clock": "klocka"
+    "clock": "klocka",
+    "ai_assistant": "AI-assistent",
+    "ai_clear_conversation": "Rensa konversation",
+    "ai_close": "Stäng",
+    "ai_switch_session": "Byt session",
+    "ai_new_session": "Ny session",
+    "ai_delete_session": "Ta bort session",
+    "ai_input_placeholder": "Fråga om mätvärden… (Enter för att skicka)",
+    "ai_analyse": "Analysera",
+    "ai_unavailable": "AI-assistent ej tillgänglig, försöker igen…",
+    "ai_resize": "Ändra storlek",
+    "ai_confirm_clear": "Rensa alla meddelanden i denna session?",
+    "ai_confirm_delete_session": "Ta bort denna session?",
+    "ai_try_prompts": "Prova ett av dessa:",
+    "ai_prompt_status": "Vad är den aktuella statusen?",
+    "ai_prompt_load": "Kontrollera serverbelastningen de senaste 5 minuterna.",
+    "ai_prompt_network": "Hur många nätverksgränssnitt övervakar vi?",
+    "ai_analyse_prompt": "Analysera dessa data för {title}."
 }

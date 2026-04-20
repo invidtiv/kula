@@ -111,5 +111,22 @@
     "no_swap": "未配置交换内存",
     "no_gpus": "未检测到 GPU",
     "collecting_data": "正在搜集数据…",
-    "clock": "时钟"
+    "clock": "时钟",
+    "ai_assistant": "AI 助手",
+    "ai_clear_conversation": "清除对话",
+    "ai_close": "关闭",
+    "ai_switch_session": "切换会话",
+    "ai_new_session": "新会话",
+    "ai_delete_session": "删除会话",
+    "ai_input_placeholder": "询问指标… (按 Enter 发送)",
+    "ai_analyse": "分析",
+    "ai_unavailable": "AI 助手不可用，正在重试…",
+    "ai_resize": "调整大小",
+    "ai_confirm_clear": "清除此会话中的所有消息？",
+    "ai_confirm_delete_session": "删除此会话？",
+    "ai_try_prompts": "尝试以下之一：",
+    "ai_prompt_status": "当前状态如何？",
+    "ai_prompt_load": "查看过去5分钟的服务器负载。",
+    "ai_prompt_network": "我们监控多少个网络接口？",
+    "ai_analyse_prompt": "分析{title}的数据。"
 }

@@ -111,5 +111,22 @@
     "no_swap": "swap tidak dikonfigurasi",
     "no_gpus": "tiada GPU dikesan",
     "collecting_data": "mengumpul data…",
-    "clock": "jam"
+    "clock": "jam",
+    "ai_assistant": "Pembantu AI",
+    "ai_clear_conversation": "Kosongkan perbualan",
+    "ai_close": "Tutup",
+    "ai_switch_session": "Tukar sesi",
+    "ai_new_session": "Sesi baharu",
+    "ai_delete_session": "Padam sesi",
+    "ai_input_placeholder": "Tanya tentang metrik… (Enter untuk hantar)",
+    "ai_analyse": "Analisis",
+    "ai_unavailable": "Pembantu AI tidak tersedia, cuba semula…",
+    "ai_resize": "Ubah saiz",
+    "ai_confirm_clear": "Padam semua mesej dalam sesi ini?",
+    "ai_confirm_delete_session": "Padam sesi ini?",
+    "ai_try_prompts": "Cuba salah satu daripada ini:",
+    "ai_prompt_status": "Apakah status semasa?",
+    "ai_prompt_load": "Periksa beban pelayan dalam 5 minit lepas.",
+    "ai_prompt_network": "Berapa banyak antara muka rangkaian yang kami pantau?",
+    "ai_analyse_prompt": "Analisis data ini untuk {title}."
 }

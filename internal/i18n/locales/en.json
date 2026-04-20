@@ -112,5 +112,22 @@
     "no_gpus": "No GPUs detected",
     "collecting_data": "Collecting data…",
     "clock": "Clock",
-    "split_by_device": "Split by device"
+    "split_by_device": "Split by device",
+    "ai_assistant": "AI Assistant",
+    "ai_clear_conversation": "Clear conversation",
+    "ai_close": "Close",
+    "ai_switch_session": "Switch session",
+    "ai_new_session": "New session",
+    "ai_delete_session": "Delete session",
+    "ai_input_placeholder": "Ask about the metrics… (Enter to send)",
+    "ai_analyse": "Analyse",
+    "ai_unavailable": "AI assistant unavailable, retrying…",
+    "ai_resize": "Resize",
+    "ai_confirm_clear": "Clear all messages in this session?",
+    "ai_confirm_delete_session": "Delete this session?",
+    "ai_try_prompts": "Try one of these:",
+    "ai_prompt_status": "What is the current status?",
+    "ai_prompt_load": "Check server load over the last 5 minutes.",
+    "ai_prompt_network": "How many network interfaces do we monitor?",
+    "ai_analyse_prompt": "Analyse this data for {title}."
 }

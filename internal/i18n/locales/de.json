@@ -111,5 +111,22 @@
     "no_swap": "Keine Swap-Konfiguration",
     "no_gpus": "Keine GPUs erkannt",
     "collecting_data": "Sammle Daten…",
-    "clock": "Uhr"
+    "clock": "Uhr",
+    "ai_assistant": "KI-Assistent",
+    "ai_clear_conversation": "Gespräch löschen",
+    "ai_close": "Schließen",
+    "ai_switch_session": "Sitzung wechseln",
+    "ai_new_session": "Neue Sitzung",
+    "ai_delete_session": "Sitzung löschen",
+    "ai_input_placeholder": "Über Metriken fragen… (Enter zum Senden)",
+    "ai_analyse": "Analysieren",
+    "ai_unavailable": "KI-Assistent nicht verfügbar, Wiederholung…",
+    "ai_resize": "Größe ändern",
+    "ai_confirm_clear": "Alle Nachrichten in dieser Sitzung löschen?",
+    "ai_confirm_delete_session": "Diese Sitzung löschen?",
+    "ai_try_prompts": "Probieren Sie eines davon:",
+    "ai_prompt_status": "Was ist der aktuelle Status?",
+    "ai_prompt_load": "Serverauslastung der letzten 5 Minuten prüfen.",
+    "ai_prompt_network": "Wie viele Netzwerkschnittstellen überwachen wir?",
+    "ai_analyse_prompt": "Analysiere diese Daten für {title}."
 }

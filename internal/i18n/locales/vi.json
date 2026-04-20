@@ -111,5 +111,22 @@
     "no_swap": "swap chưa cấu hình",
     "no_gpus": "không tìm thấy GPU",
     "collecting_data": "đang thu thập dữ liệu…",
-    "clock": "đồng hồ"
+    "clock": "đồng hồ",
+    "ai_assistant": "Trợ lý AI",
+    "ai_clear_conversation": "Xóa cuộc trò chuyện",
+    "ai_close": "Đóng",
+    "ai_switch_session": "Chuyển phiên",
+    "ai_new_session": "Phiên mới",
+    "ai_delete_session": "Xóa phiên",
+    "ai_input_placeholder": "Hỏi về số liệu… (Enter để gửi)",
+    "ai_analyse": "Phân tích",
+    "ai_unavailable": "Trợ lý AI không khả dụng, đang thử lại…",
+    "ai_resize": "Thay đổi kích thước",
+    "ai_confirm_clear": "Xóa tất cả tin nhắn trong phiên này?",
+    "ai_confirm_delete_session": "Xóa phiên này?",
+    "ai_try_prompts": "Thử một trong những điều này:",
+    "ai_prompt_status": "Trạng thái hiện tại là gì?",
+    "ai_prompt_load": "Kiểm tra tải máy chủ trong 5 phút qua.",
+    "ai_prompt_network": "Chúng tôi theo dõi bao nhiêu giao diện mạng?",
+    "ai_analyse_prompt": "Phân tích dữ liệu này cho {title}."
 }

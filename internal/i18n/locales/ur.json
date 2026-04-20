@@ -111,5 +111,22 @@
     "no_swap": "سویپ ترتیب نہیں دیا گیا",
     "no_gpus": "کوئی GPU نہیں ملا",
     "collecting_data": "ڈیٹا اکٹھا کیا جا رہا ہے…",
-    "clock": "گھڑی"
+    "clock": "گھڑی",
+    "ai_assistant": "AI معاون",
+    "ai_clear_conversation": "گفتگو صاف کریں",
+    "ai_close": "بند کریں",
+    "ai_switch_session": "سیشن تبدیل کریں",
+    "ai_new_session": "نیا سیشن",
+    "ai_delete_session": "سیشن حذف کریں",
+    "ai_input_placeholder": "میٹرکس کے بارے میں پوچھیں… (بھیجنے کے لیے Enter)",
+    "ai_analyse": "تجزیہ",
+    "ai_unavailable": "AI معاون دستیاب نہیں، دوبارہ کوشش ہو رہی ہے…",
+    "ai_resize": "سائز تبدیل کریں",
+    "ai_confirm_clear": "اس سیشن کے تمام پیغامات حذف کریں؟",
+    "ai_confirm_delete_session": "یہ سیشن حذف کریں؟",
+    "ai_try_prompts": "ان میں سے ایک آزمائیں:",
+    "ai_prompt_status": "موجودہ صورتحال کیا ہے؟",
+    "ai_prompt_load": "گزشتہ 5 منٹ میں سرور لوڈ چیک کریں۔",
+    "ai_prompt_network": "ہم کتنے نیٹ ورک انٹرفیس مانیٹر کرتے ہیں؟",
+    "ai_analyse_prompt": "{title} کے لیے اس ڈیٹا کا تجزیہ کریں۔"
 }

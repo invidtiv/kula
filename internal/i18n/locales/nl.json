@@ -111,5 +111,22 @@
     "no_swap": "geen swap geconfigureerd",
     "no_gpus": "geen GPU's gedetecteerd",
     "collecting_data": "gegevens verzamelen…",
-    "clock": "klok"
+    "clock": "klok",
+    "ai_assistant": "AI-assistent",
+    "ai_clear_conversation": "Gesprek wissen",
+    "ai_close": "Sluiten",
+    "ai_switch_session": "Sessie wisselen",
+    "ai_new_session": "Nieuwe sessie",
+    "ai_delete_session": "Sessie verwijderen",
+    "ai_input_placeholder": "Vraag over de statistieken… (Enter om te verzenden)",
+    "ai_analyse": "Analyseren",
+    "ai_unavailable": "AI-assistent niet beschikbaar, opnieuw proberen…",
+    "ai_resize": "Formaat wijzigen",
+    "ai_confirm_clear": "Alle berichten in deze sessie wissen?",
+    "ai_confirm_delete_session": "Deze sessie verwijderen?",
+    "ai_try_prompts": "Probeer een van deze:",
+    "ai_prompt_status": "Wat is de huidige status?",
+    "ai_prompt_load": "Controleer de serverbelasting in de afgelopen 5 minuten.",
+    "ai_prompt_network": "Hoeveel netwerkinterfaces monitoren we?",
+    "ai_analyse_prompt": "Analyseer deze gegevens voor {title}."
 }

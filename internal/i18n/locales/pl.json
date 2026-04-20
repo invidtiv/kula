@@ -111,5 +111,22 @@
     "no_swap": "Brak pliku wymiany",
     "no_gpus": "Nie wykryto GPU",
     "collecting_data": "Zbieranie danych…",
-    "clock": "Zegar"
+    "clock": "Zegar",
+    "ai_assistant": "Asystent AI",
+    "ai_clear_conversation": "Wyczyść rozmowę",
+    "ai_close": "Zamknij",
+    "ai_switch_session": "Przełącz sesję",
+    "ai_new_session": "Nowa sesja",
+    "ai_delete_session": "Usuń sesję",
+    "ai_input_placeholder": "Zapytaj o metryki… (Enter, aby wysłać)",
+    "ai_analyse": "Analizuj",
+    "ai_unavailable": "Asystent AI niedostępny, ponawiam próbę…",
+    "ai_resize": "Zmień rozmiar",
+    "ai_confirm_clear": "Usunąć wszystkie wiadomości z tej sesji?",
+    "ai_confirm_delete_session": "Usunąć tę sesję?",
+    "ai_try_prompts": "Wypróbuj jedno z tych:",
+    "ai_prompt_status": "Jaki jest obecny stan?",
+    "ai_prompt_load": "Sprawdź obciążenie serwera w ciągu ostatnich 5 minut.",
+    "ai_prompt_network": "Ile interfejsów sieciowych monitorujemy?",
+    "ai_analyse_prompt": "Przeanalizuj te dane dla {title}."
 }
