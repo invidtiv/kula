@@ -13,6 +13,10 @@ Types of changes: Added, Changed, Deprecated, Removed, Fixed, Security
 
 - New env var: KULA_POSTGRES_PASSWORD
 
+### Changed
+
+- fix duplicate aggregation logic for minSample/maxSample
+
 ### Fixed
 
 - PostgreSQL password is now properly single-quoted with libpq escaping

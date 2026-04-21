@@ -309,14 +309,16 @@ func (c *Collector) collectCPUTemperature() (float64, []CPUTempSensor) {
 
 ---
 
-### QUAL-02: Duplicate Aggregation Logic — `minSample` and `maxSample` Are Nearly Identical ✅ VALID
+### QUAL-02: Duplicate Aggregation Logic — `minSample` and `maxSample` Are Nearly Identical ✅ FIXED
 
 **Severity: LOW**  
 **File:** `internal/storage/store.go:429-562`
 
 The `minSample` and `maxSample` functions are almost identical — they differ only in the comparison operator (`<` vs `>` for `minF`/`maxF`). This violates the DRY principle and doubles the maintenance burden. Any new metric field must be added to both functions identically.
 
-**Validation notes:** Confirmed. Both functions are exactly 66 lines each with identical control flow (nil checks, struct copy, 6 CPU fields, 4 LoadAvg fields, 4 Memory/Swap fields, Disk device loop, Network interface loop). The only difference is `minF`/`minU` vs `maxF`/`maxU` calls.
+**Validation notes:** Confirmed. Both functions were exactly 66 lines each with identical control flow. The only difference was `minF`/`minU` vs `maxF`/`maxU` calls.
+
+**Fix applied:** Both functions replaced with one-liner wrappers delegating to a shared `mergeSample(a, b, ff, fu)` that takes the float and uint64 ops as parameters.
 
 ```go
 // Current: Two 65-line functions that differ by one operator each

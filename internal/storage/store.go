@@ -426,7 +426,10 @@ func (s *Store) Close() error {
 // Uses the last sample's values (for gauges) and averages for rates.
 // Also tracks peak (maximum) values for CPU, disk utilisation, and network throughput.
 // minSample returns an element-wise minimum of two samples.
-func minSample(a, b *collector.Sample) *collector.Sample {
+func minSample(a, b *collector.Sample) *collector.Sample { return mergeSample(a, b, minF, minU) }
+func maxSample(a, b *collector.Sample) *collector.Sample { return mergeSample(a, b, maxF, maxU) }
+
+func mergeSample(a, b *collector.Sample, ff func(float64, float64) float64, fu func(uint64, uint64) uint64) *collector.Sample {
 	if a == nil {
 		return b
 	}
@@ -435,22 +438,22 @@ func minSample(a, b *collector.Sample) *collector.Sample {
 	}
 	res := *a // copy structure and unchanged fields (like timestamps, names)
 
-	res.CPU.Total.Usage = minF(a.CPU.Total.Usage, b.CPU.Total.Usage)
-	res.CPU.Total.User = minF(a.CPU.Total.User, b.CPU.Total.User)
-	res.CPU.Total.System = minF(a.CPU.Total.System, b.CPU.Total.System)
-	res.CPU.Total.IOWait = minF(a.CPU.Total.IOWait, b.CPU.Total.IOWait)
-	res.CPU.Total.Steal = minF(a.CPU.Total.Steal, b.CPU.Total.Steal)
-	res.CPU.Temperature = minF(a.CPU.Temperature, b.CPU.Temperature)
+	res.CPU.Total.Usage = ff(a.CPU.Total.Usage, b.CPU.Total.Usage)
+	res.CPU.Total.User = ff(a.CPU.Total.User, b.CPU.Total.User)
+	res.CPU.Total.System = ff(a.CPU.Total.System, b.CPU.Total.System)
+	res.CPU.Total.IOWait = ff(a.CPU.Total.IOWait, b.CPU.Total.IOWait)
+	res.CPU.Total.Steal = ff(a.CPU.Total.Steal, b.CPU.Total.Steal)
+	res.CPU.Temperature = ff(a.CPU.Temperature, b.CPU.Temperature)
 
-	res.LoadAvg.Load1 = minF(a.LoadAvg.Load1, b.LoadAvg.Load1)
-	res.LoadAvg.Load5 = minF(a.LoadAvg.Load5, b.LoadAvg.Load5)
-	res.LoadAvg.Load15 = minF(a.LoadAvg.Load15, b.LoadAvg.Load15)
+	res.LoadAvg.Load1 = ff(a.LoadAvg.Load1, b.LoadAvg.Load1)
+	res.LoadAvg.Load5 = ff(a.LoadAvg.Load5, b.LoadAvg.Load5)
+	res.LoadAvg.Load15 = ff(a.LoadAvg.Load15, b.LoadAvg.Load15)
 
-	res.Memory.Used = minU(a.Memory.Used, b.Memory.Used)
-	res.Memory.UsedPercent = minF(a.Memory.UsedPercent, b.Memory.UsedPercent)
+	res.Memory.Used = fu(a.Memory.Used, b.Memory.Used)
+	res.Memory.UsedPercent = ff(a.Memory.UsedPercent, b.Memory.UsedPercent)
 
-	res.Swap.Used = minU(a.Swap.Used, b.Swap.Used)
-	res.Swap.UsedPercent = minF(a.Swap.UsedPercent, b.Swap.UsedPercent)
+	res.Swap.Used = fu(a.Swap.Used, b.Swap.Used)
+	res.Swap.UsedPercent = ff(a.Swap.UsedPercent, b.Swap.UsedPercent)
 
 	res.Disks.Devices = make([]collector.DiskDevice, len(a.Disks.Devices))
 	for i := range a.Disks.Devices {
@@ -464,11 +467,11 @@ func minSample(a, b *collector.Sample) *collector.Sample {
 		}
 		res.Disks.Devices[i] = collector.DiskDevice{
 			Name:         devA.Name,
-			Utilization:  minF(devA.Utilization, devB.Utilization),
-			ReadBytesPS:  minF(devA.ReadBytesPS, devB.ReadBytesPS),
-			WriteBytesPS: minF(devA.WriteBytesPS, devB.WriteBytesPS),
-			ReadsPerSec:  minF(devA.ReadsPerSec, devB.ReadsPerSec),
-			WritesPerSec: minF(devA.WritesPerSec, devB.WritesPerSec),
+			Utilization:  ff(devA.Utilization, devB.Utilization),
+			ReadBytesPS:  ff(devA.ReadBytesPS, devB.ReadBytesPS),
+			WriteBytesPS: ff(devA.WriteBytesPS, devB.WriteBytesPS),
+			ReadsPerSec:  ff(devA.ReadsPerSec, devB.ReadsPerSec),
+			WritesPerSec: ff(devA.WritesPerSec, devB.WritesPerSec),
 		}
 	}
 
@@ -484,78 +487,10 @@ func minSample(a, b *collector.Sample) *collector.Sample {
 		}
 		res.Network.Interfaces[i] = collector.NetInterface{
 			Name:   ifA.Name,
-			RxMbps: minF(ifA.RxMbps, ifB.RxMbps),
-			TxMbps: minF(ifA.TxMbps, ifB.TxMbps),
-			RxPPS:  minF(ifA.RxPPS, ifB.RxPPS),
-			TxPPS:  minF(ifA.TxPPS, ifB.TxPPS),
-		}
-	}
-	return &res
-}
-
-// maxSample returns an element-wise maximum of two samples.
-func maxSample(a, b *collector.Sample) *collector.Sample {
-	if a == nil {
-		return b
-	}
-	if b == nil {
-		return a
-	}
-	res := *a // copy structure
-
-	res.CPU.Total.Usage = maxF(a.CPU.Total.Usage, b.CPU.Total.Usage)
-	res.CPU.Total.User = maxF(a.CPU.Total.User, b.CPU.Total.User)
-	res.CPU.Total.System = maxF(a.CPU.Total.System, b.CPU.Total.System)
-	res.CPU.Total.IOWait = maxF(a.CPU.Total.IOWait, b.CPU.Total.IOWait)
-	res.CPU.Total.Steal = maxF(a.CPU.Total.Steal, b.CPU.Total.Steal)
-	res.CPU.Temperature = maxF(a.CPU.Temperature, b.CPU.Temperature)
-
-	res.LoadAvg.Load1 = maxF(a.LoadAvg.Load1, b.LoadAvg.Load1)
-	res.LoadAvg.Load5 = maxF(a.LoadAvg.Load5, b.LoadAvg.Load5)
-	res.LoadAvg.Load15 = maxF(a.LoadAvg.Load15, b.LoadAvg.Load15)
-
-	res.Memory.Used = maxU(a.Memory.Used, b.Memory.Used)
-	res.Memory.UsedPercent = maxF(a.Memory.UsedPercent, b.Memory.UsedPercent)
-
-	res.Swap.Used = maxU(a.Swap.Used, b.Swap.Used)
-	res.Swap.UsedPercent = maxF(a.Swap.UsedPercent, b.Swap.UsedPercent)
-
-	res.Disks.Devices = make([]collector.DiskDevice, len(a.Disks.Devices))
-	for i := range a.Disks.Devices {
-		devA := a.Disks.Devices[i]
-		var devB collector.DiskDevice
-		for _, dev := range b.Disks.Devices {
-			if dev.Name == devA.Name {
-				devB = dev
-				break
-			}
-		}
-		res.Disks.Devices[i] = collector.DiskDevice{
-			Name:         devA.Name,
-			Utilization:  maxF(devA.Utilization, devB.Utilization),
-			ReadBytesPS:  maxF(devA.ReadBytesPS, devB.ReadBytesPS),
-			WriteBytesPS: maxF(devA.WriteBytesPS, devB.WriteBytesPS),
-			ReadsPerSec:  maxF(devA.ReadsPerSec, devB.ReadsPerSec),
-			WritesPerSec: maxF(devA.WritesPerSec, devB.WritesPerSec),
-		}
-	}
-
-	res.Network.Interfaces = make([]collector.NetInterface, len(a.Network.Interfaces))
-	for i := range a.Network.Interfaces {
-		ifA := a.Network.Interfaces[i]
-		var ifB collector.NetInterface
-		for _, iface := range b.Network.Interfaces {
-			if iface.Name == ifA.Name {
-				ifB = iface
-				break
-			}
-		}
-		res.Network.Interfaces[i] = collector.NetInterface{
-			Name:   ifA.Name,
-			RxMbps: maxF(ifA.RxMbps, ifB.RxMbps),
-			TxMbps: maxF(ifA.TxMbps, ifB.TxMbps),
-			RxPPS:  maxF(ifA.RxPPS, ifB.RxPPS),
-			TxPPS:  maxF(ifA.TxPPS, ifB.TxPPS),
+			RxMbps: ff(ifA.RxMbps, ifB.RxMbps),
+			TxMbps: ff(ifA.TxMbps, ifB.TxMbps),
+			RxPPS:  ff(ifA.RxPPS, ifB.RxPPS),
+			TxPPS:  ff(ifA.TxPPS, ifB.TxPPS),
 		}
 	}
 	return &res
