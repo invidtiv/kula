@@ -206,26 +206,21 @@ if abi < 1 {
 
 ---
 
-### SEC-06: WebSocket Origin Check Can Be Bypassed for Non-Browser Clients
+### SEC-06: WebSocket Origin Check Can Be Bypassed for Non-Browser Clients ❌ NOT VALID
 
 **Severity: LOW**  
 **File:** `internal/web/websocket.go:21-48`  
 **CVSS: 3.0**
 
-The WebSocket upgrader allows connections with no `Origin` header (to support CLI tools). An attacker using a crafted HTTP client (not a browser) can omit the `Origin` header and bypass the same-origin check. This is a known trade-off for CLI compatibility, but it means the WebSocket endpoint is accessible to any non-browser client that can reach the server.
+~~An attacker using a crafted HTTP client can omit the `Origin` header and bypass the same-origin check, making the WebSocket endpoint accessible to any non-browser client.~~
 
-```go
-// Current:
-CheckOrigin: func(r *http.Request) bool {
-    origin := r.Header.Get("Origin")
-    if origin == "" {
-        return true  // Allow non-browser clients
-    }
-    // ...
-}
-```
+**Finding is not valid.** The `/ws` endpoint is always wired behind `AuthMiddleware` in `server.go`. This provides two independent protection layers:
 
-**Recommendation:** When authentication is enabled, this is mitigated because the WebSocket handler is behind the auth middleware. However, when auth is disabled, consider adding a configuration option to require origin validation even for non-browser clients, or add a configurable allowlist of permitted origins.
+1. **Auth enabled** — Any connection (with or without `Origin`) must supply a valid `kula_session` cookie or Bearer token before the WebSocket upgrade proceeds. A non-browser attacker omitting `Origin` still cannot connect without credentials. Browser-based CSWSH is additionally blocked by the `SameSite: Strict` session cookie, which prevents the browser from sending it to any cross-origin request.
+
+2. **Auth disabled** — The entire server is intentionally publicly accessible by operator choice; the empty-`Origin` path adds no new attack surface.
+
+The finding itself states the mitigation: *"when authentication is enabled, this is mitigated because the WebSocket handler is behind the auth middleware."* No action required.
 
 ---
 
