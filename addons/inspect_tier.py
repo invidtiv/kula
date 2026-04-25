@@ -21,6 +21,7 @@ FLAG_HAS_MIN = 1 << 0
 FLAG_HAS_MAX = 1 << 1
 FLAG_HAS_DATA = 1 << 2
 FLAG_HAS_APPS = 1 << 3
+FLAG_HAS_APACHE2 = 1 << 8
 
 FIXED_BLOCK_SIZE = 218  # must match fixedBlockSize in codec.go
 
@@ -265,7 +266,8 @@ def _decode_fixed(data: bytes, off: int) -> Tuple[Dict[str, Any], int]:
 
 
 def _decode_variable(
-    data: bytes, off: int, s: Dict[str, Any], has_apps: bool = False
+    data: bytes, off: int, s: Dict[str, Any], has_apps: bool = False,
+    has_apache2: bool = False,
 ) -> Tuple[Dict[str, Any], int]:
     # pylint: disable=too-many-locals, too-many-statements
     # 1. Network interfaces
@@ -435,43 +437,7 @@ def _decode_variable(
             "waiting": waiting,
         }
 
-    # 7b. Apache2 (1-byte presence + 72-byte fixed block)
-    apache2_present, off = _get_u8(data, off)
-    if apache2_present != 0:
-        busy_workers, off = _get_i32(data, off)
-        idle_workers, off = _get_i32(data, off)
-        total_accesses, off = _get_u64(data, off)
-        total_kbytes, off = _get_u64(data, off)
-        accesses_ps, off = _get_f32(data, off)
-        kbytes_ps, off = _get_f32(data, off)
-        req_per_sec, off = _get_f32(data, off)
-        bytes_per_sec, off = _get_f32(data, off)
-        bytes_per_req, off = _get_f32(data, off)
-        cpu_load, off = _get_f32(data, off)
-        uptime, off = _get_i64(data, off)
-        waiting, off = _get_i32(data, off)
-        reading, off = _get_i32(data, off)
-        sending, off = _get_i32(data, off)
-        keepalive, off = _get_i32(data, off)
-        apps["apache2"] = {
-            "busy_workers": busy_workers,
-            "idle_workers": idle_workers,
-            "total_accesses": total_accesses,
-            "total_kbytes": total_kbytes,
-            "accesses_ps": accesses_ps,
-            "kbytes_ps": kbytes_ps,
-            "req_per_sec": req_per_sec,
-            "bytes_per_sec": bytes_per_sec,
-            "bytes_per_req": bytes_per_req,
-            "cpu_load": cpu_load,
-            "uptime": uptime,
-            "waiting": waiting,
-            "reading": reading,
-            "sending": sending,
-            "keepalive": keepalive,
-        }
-
-    # 7c. Containers (uint16 count + variable per container)
+    # 7b. Containers (uint16 count + variable per container)
     num_containers, off = _get_u16(data, off)
     containers = []
     for _ in range(num_containers):
@@ -502,7 +468,7 @@ def _decode_variable(
     if containers:
         apps["containers"] = containers
 
-    # 7d. PostgreSQL — version-tagged presence byte:
+    # 7c. PostgreSQL — version-tagged presence byte:
     #   0 = not present
     #   1 = v1 (56-byte block: 3×i32 + 7×f32 + 2×i64)
     #   2 = v2 (104-byte block: 5×i32 + 13×f32 + 4×i64)
@@ -584,7 +550,133 @@ def _decode_variable(
             "db_size_bytes": db_size_bytes,
         }
 
-    # 7e. Custom metrics (uint16 group count, per group: str + uint16 metric count)
+    # 7d. MySQL — presence byte doubles as version tag:
+    #   0 = not present
+    #   1 = v1 format (64-byte block: 4×i32 + 11×f32)
+    my_version, off = _get_u8(data, off)
+    if my_version >= 1:
+        threads_connected, off = _get_i32(data, off)
+        threads_running, off = _get_i32(data, off)
+        threads_cached, off = _get_i32(data, off)
+        max_connections, off = _get_i32(data, off)
+        queries_ps, off = _get_f32(data, off)
+        com_select_ps, off = _get_f32(data, off)
+        com_insert_ps, off = _get_f32(data, off)
+        com_update_ps, off = _get_f32(data, off)
+        com_delete_ps, off = _get_f32(data, off)
+        slow_queries_ps, off = _get_f32(data, off)
+        innodb_bp_hit_pct, off = _get_f32(data, off)
+        innodb_bp_reads_ps, off = _get_f32(data, off)
+        table_locks_waited_ps, off = _get_f32(data, off)
+        row_lock_waits_ps, off = _get_f32(data, off)
+        apps["mysql"] = {
+            "threads_connected": threads_connected,
+            "threads_running": threads_running,
+            "threads_cached": threads_cached,
+            "max_connections": max_connections,
+            "queries_ps": queries_ps,
+            "com_select_ps": com_select_ps,
+            "com_insert_ps": com_insert_ps,
+            "com_update_ps": com_update_ps,
+            "com_delete_ps": com_delete_ps,
+            "slow_queries_ps": slow_queries_ps,
+            "innodb_buffer_pool_hit_pct": innodb_bp_hit_pct,
+            "innodb_bp_reads_ps": innodb_bp_reads_ps,
+            "table_locks_waited_ps": table_locks_waited_ps,
+            "row_lock_waits_ps": row_lock_waits_ps,
+        }
+
+    # 7e. Apache2 — gated by has_apache2 flag so old records skip this section.
+    # Presence byte doubles as version tag:
+    #   0 = not present
+    #   1 = v1 format (72-byte block)
+    #   2 = v2 format (100-byte block: adds 7 scoreboard states)
+    if has_apache2:
+        apache2_ver, off = _get_u8(data, off)
+        if apache2_ver == 1:
+            busy_workers, off = _get_i32(data, off)
+            idle_workers, off = _get_i32(data, off)
+            total_accesses, off = _get_u64(data, off)
+            total_kbytes, off = _get_u64(data, off)
+            accesses_ps, off = _get_f32(data, off)
+            kbytes_ps, off = _get_f32(data, off)
+            req_per_sec, off = _get_f32(data, off)
+            bytes_per_sec, off = _get_f32(data, off)
+            bytes_per_req, off = _get_f32(data, off)
+            cpu_load, off = _get_f32(data, off)
+            uptime, off = _get_i64(data, off)
+            waiting, off = _get_i32(data, off)
+            reading, off = _get_i32(data, off)
+            sending, off = _get_i32(data, off)
+            keepalive, off = _get_i32(data, off)
+            apps["apache2"] = {
+                "busy_workers": busy_workers,
+                "idle_workers": idle_workers,
+                "total_accesses": total_accesses,
+                "total_kbytes": total_kbytes,
+                "accesses_ps": accesses_ps,
+                "kbytes_ps": kbytes_ps,
+                "req_per_sec": req_per_sec,
+                "bytes_per_sec": bytes_per_sec,
+                "bytes_per_req": bytes_per_req,
+                "cpu_load": cpu_load,
+                "uptime": uptime,
+                "waiting": waiting,
+                "reading": reading,
+                "sending": sending,
+                "keepalive": keepalive,
+                "_format": "v1",
+            }
+        elif apache2_ver == 2:
+            busy_workers, off = _get_i32(data, off)
+            idle_workers, off = _get_i32(data, off)
+            total_accesses, off = _get_u64(data, off)
+            total_kbytes, off = _get_u64(data, off)
+            accesses_ps, off = _get_f32(data, off)
+            kbytes_ps, off = _get_f32(data, off)
+            req_per_sec, off = _get_f32(data, off)
+            bytes_per_sec, off = _get_f32(data, off)
+            bytes_per_req, off = _get_f32(data, off)
+            cpu_load, off = _get_f32(data, off)
+            uptime, off = _get_i64(data, off)
+            waiting, off = _get_i32(data, off)
+            reading, off = _get_i32(data, off)
+            sending, off = _get_i32(data, off)
+            keepalive, off = _get_i32(data, off)
+            starting, off = _get_i32(data, off)
+            dns, off = _get_i32(data, off)
+            closing, off = _get_i32(data, off)
+            logging, off = _get_i32(data, off)
+            graceful, off = _get_i32(data, off)
+            idle_cleanup, off = _get_i32(data, off)
+            open_slots, off = _get_i32(data, off)
+            apps["apache2"] = {
+                "busy_workers": busy_workers,
+                "idle_workers": idle_workers,
+                "total_accesses": total_accesses,
+                "total_kbytes": total_kbytes,
+                "accesses_ps": accesses_ps,
+                "kbytes_ps": kbytes_ps,
+                "req_per_sec": req_per_sec,
+                "bytes_per_sec": bytes_per_sec,
+                "bytes_per_req": bytes_per_req,
+                "cpu_load": cpu_load,
+                "uptime": uptime,
+                "waiting": waiting,
+                "reading": reading,
+                "sending": sending,
+                "keepalive": keepalive,
+                "starting": starting,
+                "dns": dns,
+                "closing": closing,
+                "logging": logging,
+                "graceful": graceful,
+                "idle_cleanup": idle_cleanup,
+                "open_slots": open_slots,
+                "_format": "v2",
+            }
+
+    # 7f. Custom metrics (uint16 group count, per group: str + uint16 metric count)
     num_groups, off = _get_u16(data, off)
     custom: Dict[str, List[Dict[str, Any]]] = {}
     for _ in range(num_groups):
@@ -635,10 +727,12 @@ def decode_v2_record(payload: bytes) -> Optional[Dict[str, Any]]:
             "has_min": bool(flags & FLAG_HAS_MIN),
             "has_max": bool(flags & FLAG_HAS_MAX),
             "has_apps": bool(flags & FLAG_HAS_APPS),
+            "has_apache2": bool(flags & FLAG_HAS_APACHE2),
         },
     }
 
     has_apps = bool(flags & FLAG_HAS_APPS)
+    has_apache2 = bool(flags & FLAG_HAS_APACHE2)
     for label, flag in [
         ("data", FLAG_HAS_DATA),
         ("min", FLAG_HAS_MIN),
@@ -646,7 +740,7 @@ def decode_v2_record(payload: bytes) -> Optional[Dict[str, Any]]:
     ]:
         if flags & flag:
             block, off = _decode_fixed(payload, off)
-            block, off = _decode_variable(payload, off, block, has_apps)
+            block, off = _decode_variable(payload, off, block, has_apps, has_apache2)
             result[label] = block
 
     return result

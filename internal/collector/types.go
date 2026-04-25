@@ -215,6 +215,13 @@ type Apache2Stats struct {
 	Reading       int     `json:"reading"`
 	Sending       int     `json:"sending"`
 	Keepalive     int     `json:"keepalive"`
+	Starting      int     `json:"starting"`
+	DNS           int     `json:"dns"`
+	Closing       int     `json:"closing"`
+	Logging       int     `json:"logging"`
+	Graceful      int     `json:"graceful"`
+	IdleCleanup   int     `json:"idle_cleanup"`
+	OpenSlots     int     `json:"open_slots"`
 }
 
 // ContainerStats holds per-container resource usage metrics.

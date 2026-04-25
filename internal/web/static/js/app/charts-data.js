@@ -544,12 +544,20 @@ export function addSampleToCharts(item, ts) {
         }
 
         if (!state.charts.apache2States) {
+            const cl = colorList;
             createAppChartCard('card-apache2-states', 'chart-apache2-states', 'apache2-states-subtitle', 'Apache2 \u2014 Worker States', APP_ORDER_APACHE2 + 2);
             state.charts.apache2States = createTimeSeriesChart('chart-apache2-states', [
-                { label: 'Waiting', borderColor: colors.yellow, data: [], fill: false },
-                { label: 'Reading', borderColor: colors.green, data: [], fill: false },
-                { label: 'Sending', borderColor: colors.orange, data: [], fill: false },
-                { label: 'Keepalive', borderColor: colors.blue, data: [], fill: false },
+                { label: 'Waiting',     borderColor: cl[0], data: [], fill: false },
+                { label: 'Reading',     borderColor: cl[1], data: [], fill: false },
+                { label: 'Sending',     borderColor: cl[2], data: [], fill: false },
+                { label: 'Keepalive',   borderColor: cl[3], data: [], fill: false },
+                { label: 'Starting',    borderColor: cl[4], data: [], fill: false },
+                { label: 'DNS',         borderColor: cl[5], data: [], fill: false },
+                { label: 'Closing',     borderColor: cl[6], data: [], fill: false },
+                { label: 'Logging',     borderColor: cl[7], data: [], fill: false },
+                { label: 'Graceful',    borderColor: cl[8], data: [], fill: false },
+                { label: 'IdleCleanup', borderColor: cl[9], data: [], fill: false },
+                { label: 'OpenSlots',   borderColor: cl[0], borderDash: [3, 2], data: [], fill: false },
             ]);
         }
         if (state.charts.apache2States) {
@@ -557,8 +565,15 @@ export function addSampleToCharts(item, ts) {
             state.charts.apache2States.data.datasets[1].data.push(point(a.reading));
             state.charts.apache2States.data.datasets[2].data.push(point(a.sending));
             state.charts.apache2States.data.datasets[3].data.push(point(a.keepalive));
+            state.charts.apache2States.data.datasets[4].data.push(point(a.starting));
+            state.charts.apache2States.data.datasets[5].data.push(point(a.dns));
+            state.charts.apache2States.data.datasets[6].data.push(point(a.closing));
+            state.charts.apache2States.data.datasets[7].data.push(point(a.logging));
+            state.charts.apache2States.data.datasets[8].data.push(point(a.graceful));
+            state.charts.apache2States.data.datasets[9].data.push(point(a.idle_cleanup));
+            state.charts.apache2States.data.datasets[10].data.push(point(a.open_slots));
             const sub = document.getElementById('apache2-states-subtitle');
-            if (sub) sub.textContent = `W: ${a.waiting}  R: ${a.reading}  S: ${a.sending}  K: ${a.keepalive}`;
+            if (sub) sub.textContent = `Busy: ${a.busy_workers}  Idle: ${a.idle_workers}  Slots: ${a.open_slots}`;
         }
     }
 

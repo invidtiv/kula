@@ -121,6 +121,10 @@ Scoreboard: _W___R___K...............................................
 		t.Errorf("Expected non-zero scoreboard states: W=%d R=%d S=%d K=%d",
 			stats.Waiting, stats.Reading, stats.Sending, stats.Keepalive)
 	}
+	// Open slots (.) should be tracked
+	if stats.OpenSlots < 1 {
+		t.Errorf("Expected non-zero open slots, got %d", stats.OpenSlots)
+	}
 
 	// Test malformed output returns nil
 	badServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -177,6 +181,37 @@ _________W_______R___________________K__________________.............
 	if stats.Waiting < 2 || stats.Reading < 2 || stats.Sending < 2 || stats.Keepalive < 2 {
 		t.Errorf("Multi-line scoreboard undercounted: W=%d R=%d S=%d K=%d (all should be >= 2)",
 			stats.Waiting, stats.Reading, stats.Sending, stats.Keepalive)
+	}
+	// Open slots (.) should be present from the dots in scoreboard
+	if stats.OpenSlots < 10 {
+		t.Errorf("Expected >= 10 open slots in multi-line test, got %d", stats.OpenSlots)
+	}
+
+	// Test all scoreboard states with dedicated characters
+	allSBO := `Total Accesses: 100
+BusyWorkers: 5
+IdleWorkers: 5
+Scoreboard: _SRWKDCLGI._SRWKDCLGI.
+`
+	allSBServer := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte(allSBO))
+	}))
+	defer allSBServer.Close()
+
+	c.appCfg.Apache2.StatusURL = allSBServer.URL
+	c.prevApache = apache2Raw{} // reset
+	stats = c.collectApache2(1.0)
+	if stats == nil {
+		t.Fatal("Expected stats with full scoreboard, got nil")
+	}
+	if stats.Waiting != 2 || stats.Starting != 2 || stats.Reading != 2 ||
+		stats.Sending != 2 || stats.Keepalive != 2 || stats.DNS != 2 ||
+		stats.Closing != 2 || stats.Logging != 2 || stats.Graceful != 2 ||
+		stats.IdleCleanup != 2 || stats.OpenSlots != 2 {
+		t.Errorf("Full scoreboard miscount: _=%d S=%d R=%d W=%d K=%d D=%d C=%d L=%d G=%d I=%d .=%d",
+			stats.Waiting, stats.Starting, stats.Reading, stats.Sending, stats.Keepalive,
+			stats.DNS, stats.Closing, stats.Logging, stats.Graceful, stats.IdleCleanup, stats.OpenSlots)
 	}
 
 	// Test counter reset (service restart): previous counters are high,

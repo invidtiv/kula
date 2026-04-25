@@ -52,10 +52,11 @@ import (
 
 // Flags packed into the 2-byte preamble flags field.
 const (
-	flagHasMin  uint16 = 1 << 0
-	flagHasMax  uint16 = 1 << 1
-	flagHasData uint16 = 1 << 2
-	flagHasApps uint16 = 1 << 3 // variable block includes application metrics section
+	flagHasMin     uint16 = 1 << 0
+	flagHasMax     uint16 = 1 << 1
+	flagHasData    uint16 = 1 << 2
+	flagHasApps    uint16 = 1 << 3 // variable block includes application metrics section
+	flagHasApache2 uint16 = 1 << 8 // variable block includes Apache2 metrics after nginx
 )
 
 // fixedBlockSize is the size in bytes of the encoded fixed scalar block.
@@ -209,7 +210,8 @@ func appendPreamble(buf []byte, a *AggregatedSample) []byte {
 	if a.Max != nil {
 		flags |= flagHasMax
 	}
-	flags |= flagHasApps // always set: variable blocks include app metrics section
+	flags |= flagHasApps    // always set: variable blocks include app metrics section
+	flags |= flagHasApache2 // always set: Apache2 metrics byte follows nginx
 	binary.LittleEndian.PutUint16(b[16:], flags)
 	return append(buf, b[:]...)
 }
@@ -448,31 +450,6 @@ func appendVariable(buf []byte, s *collector.Sample) ([]byte, error) {
 		buf = append(buf, 0)
 	}
 
-	// Apache2 (1-byte presence + 72-byte fixed block when present)
-	if s.Apps.Apache2 != nil {
-		buf = append(buf, 1)
-		a := s.Apps.Apache2
-		var ab [72]byte
-		binary.LittleEndian.PutUint32(ab[0:], uint32(int32(a.BusyWorkers)))
-		binary.LittleEndian.PutUint32(ab[4:], uint32(int32(a.IdleWorkers)))
-		binary.LittleEndian.PutUint64(ab[8:], a.TotalAccesses)
-		binary.LittleEndian.PutUint64(ab[16:], a.TotalKBytes)
-		putF32(ab[24:], a.AccessesPS)
-		putF32(ab[28:], a.KBytesPS)
-		putF32(ab[32:], a.ReqPerSec)
-		putF32(ab[36:], a.BytesPerSec)
-		putF32(ab[40:], a.BytesPerReq)
-		putF32(ab[44:], a.CPULoad)
-		binary.LittleEndian.PutUint64(ab[48:], uint64(a.Uptime))
-		binary.LittleEndian.PutUint32(ab[56:], uint32(int32(a.Waiting)))
-		binary.LittleEndian.PutUint32(ab[60:], uint32(int32(a.Reading)))
-		binary.LittleEndian.PutUint32(ab[64:], uint32(int32(a.Sending)))
-		binary.LittleEndian.PutUint32(ab[68:], uint32(int32(a.Keepalive)))
-		buf = append(buf, ab[:]...)
-	} else {
-		buf = append(buf, 0)
-	}
-
 	// Containers (uint16 count + variable per container)
 	ctCount := len(s.Apps.Containers)
 	if ctCount > 65535 {
@@ -565,6 +542,41 @@ func appendVariable(buf []byte, s *collector.Sample) ([]byte, error) {
 		buf = append(buf, 0)
 	}
 
+	// Apache2 — presence byte doubles as version tag:
+	//   0 = not present
+	//   1 = v1 format (72-byte block, pre-0.17.0: BusyWorkers through Keepalive only)
+	//   2 = v2 format (100-byte block: adds Starting/DNS/Closing/Logging/Graceful/IdleCleanup/OpenSlots)
+	if s.Apps.Apache2 != nil {
+		buf = append(buf, 2)
+		a := s.Apps.Apache2
+		var ab [100]byte
+		binary.LittleEndian.PutUint32(ab[0:], uint32(int32(a.BusyWorkers)))
+		binary.LittleEndian.PutUint32(ab[4:], uint32(int32(a.IdleWorkers)))
+		binary.LittleEndian.PutUint64(ab[8:], a.TotalAccesses)
+		binary.LittleEndian.PutUint64(ab[16:], a.TotalKBytes)
+		putF32(ab[24:], a.AccessesPS)
+		putF32(ab[28:], a.KBytesPS)
+		putF32(ab[32:], a.ReqPerSec)
+		putF32(ab[36:], a.BytesPerSec)
+		putF32(ab[40:], a.BytesPerReq)
+		putF32(ab[44:], a.CPULoad)
+		binary.LittleEndian.PutUint64(ab[48:], uint64(a.Uptime))
+		binary.LittleEndian.PutUint32(ab[56:], uint32(int32(a.Waiting)))
+		binary.LittleEndian.PutUint32(ab[60:], uint32(int32(a.Reading)))
+		binary.LittleEndian.PutUint32(ab[64:], uint32(int32(a.Sending)))
+		binary.LittleEndian.PutUint32(ab[68:], uint32(int32(a.Keepalive)))
+		binary.LittleEndian.PutUint32(ab[72:], uint32(int32(a.Starting)))
+		binary.LittleEndian.PutUint32(ab[76:], uint32(int32(a.DNS)))
+		binary.LittleEndian.PutUint32(ab[80:], uint32(int32(a.Closing)))
+		binary.LittleEndian.PutUint32(ab[84:], uint32(int32(a.Logging)))
+		binary.LittleEndian.PutUint32(ab[88:], uint32(int32(a.Graceful)))
+		binary.LittleEndian.PutUint32(ab[92:], uint32(int32(a.IdleCleanup)))
+		binary.LittleEndian.PutUint32(ab[96:], uint32(int32(a.OpenSlots)))
+		buf = append(buf, ab[:]...)
+	} else {
+		buf = append(buf, 0)
+	}
+
 	// Custom metrics (uint16 group count, sorted keys for deterministic encoding)
 	customKeys := make([]string, 0, len(s.Apps.Custom))
 	for k := range s.Apps.Custom {
@@ -607,6 +619,7 @@ func decodeSample(data []byte) (*AggregatedSample, error) {
 	a.Duration = time.Duration(binary.LittleEndian.Uint64(data[8:]))
 	flags := binary.LittleEndian.Uint16(data[16:])
 	hasApps := flags&flagHasApps != 0
+	hasApache2 := flags&flagHasApache2 != 0
 	off := 18
 
 	if flags&flagHasData != 0 {
@@ -615,7 +628,7 @@ func decodeSample(data []byte) (*AggregatedSample, error) {
 			return nil, fmt.Errorf("decode data fixed: %w", err)
 		}
 		off += n
-		vn, err := decodeVariable(data[off:], s, hasApps)
+		vn, err := decodeVariable(data[off:], s, hasApps, hasApache2)
 		if err != nil {
 			return nil, fmt.Errorf("decode data variable: %w", err)
 		}
@@ -630,7 +643,7 @@ func decodeSample(data []byte) (*AggregatedSample, error) {
 			return nil, fmt.Errorf("decode min fixed: %w", err)
 		}
 		off += n
-		vn, err := decodeVariable(data[off:], s, hasApps)
+		vn, err := decodeVariable(data[off:], s, hasApps, hasApache2)
 		if err != nil {
 			return nil, fmt.Errorf("decode min variable: %w", err)
 		}
@@ -645,7 +658,7 @@ func decodeSample(data []byte) (*AggregatedSample, error) {
 			return nil, fmt.Errorf("decode max fixed: %w", err)
 		}
 		off += n
-		vn, err := decodeVariable(data[off:], s, hasApps)
+		vn, err := decodeVariable(data[off:], s, hasApps, hasApache2)
 		if err != nil {
 			return nil, fmt.Errorf("decode max variable: %w", err)
 		}
@@ -727,8 +740,11 @@ func decodeFixed(data []byte) (*collector.Sample, int, error) {
 // (flagHasApps was set in the preamble). Old records without the flag must not
 // attempt to decode app metrics because the remaining bytes belong to the next
 // fixed+variable block (min/max) in multi-block aggregated records.
+// hasApache2 indicates the nginx section is followed by the Apache2 presence
+// byte (flagHasApache2). Records written before v0.16.0 omit this byte and
+// go straight from nginx to containers.
 // Returns the number of bytes consumed and any error.
-func decodeVariable(data []byte, s *collector.Sample, hasApps bool) (int, error) {
+func decodeVariable(data []byte, s *collector.Sample, hasApps, hasApache2 bool) (int, error) {
 	off := 0
 
 	need := func(n int, ctx string) error {
@@ -953,31 +969,6 @@ func decodeVariable(data []byte, s *collector.Sample, hasApps bool) (int, error)
 		s.Apps.Nginx = ng
 	}
 
-	// Apache2
-	apache2Present := data[off]; off++
-	if apache2Present != 0 {
-		if err := need(72, "apache2 fields"); err != nil {
-			return off, err
-		}
-		ap := &collector.Apache2Stats{}
-		ap.BusyWorkers = int(int32(binary.LittleEndian.Uint32(data[off:]))); off += 4
-		ap.IdleWorkers = int(int32(binary.LittleEndian.Uint32(data[off:]))); off += 4
-		ap.TotalAccesses = binary.LittleEndian.Uint64(data[off:]); off += 8
-		ap.TotalKBytes = binary.LittleEndian.Uint64(data[off:]); off += 8
-		ap.AccessesPS = getF32(data[off:]); off += 4
-		ap.KBytesPS = getF32(data[off:]); off += 4
-		ap.ReqPerSec = getF32(data[off:]); off += 4
-		ap.BytesPerSec = getF32(data[off:]); off += 4
-		ap.BytesPerReq = getF32(data[off:]); off += 4
-		ap.CPULoad = getF32(data[off:]); off += 4
-		ap.Uptime = int64(binary.LittleEndian.Uint64(data[off:])); off += 8
-		ap.Waiting = int(int32(binary.LittleEndian.Uint32(data[off:]))); off += 4
-		ap.Reading = int(int32(binary.LittleEndian.Uint32(data[off:]))); off += 4
-		ap.Sending = int(int32(binary.LittleEndian.Uint32(data[off:]))); off += 4
-		ap.Keepalive = int(int32(binary.LittleEndian.Uint32(data[off:]))); off += 4
-		s.Apps.Apache2 = ap
-	}
-
 	// Containers
 	if err := need(2, "container count"); err != nil {
 		return off, err
@@ -1101,6 +1092,63 @@ func decodeVariable(data []byte, s *collector.Sample, hasApps bool) (int, error)
 		my.TableLocksWaitedPS = getF32(data[off:]); off += 4
 		my.RowLockWaitsPS  = getF32(data[off:]); off += 4
 		s.Apps.Mysql = my
+	}
+
+	// Apache2 — gated by flagHasApache2 so old records (pre-0.16.0) that
+	// lack this flag skip the byte and continue to custom metrics.
+	if hasApache2 {
+		apache2Version := data[off]; off++
+		switch apache2Version {
+		case 1:
+			if err := need(72, "apache2 v1 fields"); err != nil {
+				return off, err
+			}
+			ap := &collector.Apache2Stats{}
+			ap.BusyWorkers = int(int32(binary.LittleEndian.Uint32(data[off:]))); off += 4
+			ap.IdleWorkers = int(int32(binary.LittleEndian.Uint32(data[off:]))); off += 4
+			ap.TotalAccesses = binary.LittleEndian.Uint64(data[off:]); off += 8
+			ap.TotalKBytes = binary.LittleEndian.Uint64(data[off:]); off += 8
+			ap.AccessesPS = getF32(data[off:]); off += 4
+			ap.KBytesPS = getF32(data[off:]); off += 4
+			ap.ReqPerSec = getF32(data[off:]); off += 4
+			ap.BytesPerSec = getF32(data[off:]); off += 4
+			ap.BytesPerReq = getF32(data[off:]); off += 4
+			ap.CPULoad = getF32(data[off:]); off += 4
+			ap.Uptime = int64(binary.LittleEndian.Uint64(data[off:])); off += 8
+			ap.Waiting = int(int32(binary.LittleEndian.Uint32(data[off:]))); off += 4
+			ap.Reading = int(int32(binary.LittleEndian.Uint32(data[off:]))); off += 4
+			ap.Sending = int(int32(binary.LittleEndian.Uint32(data[off:]))); off += 4
+			ap.Keepalive = int(int32(binary.LittleEndian.Uint32(data[off:]))); off += 4
+			s.Apps.Apache2 = ap
+		case 2:
+			if err := need(100, "apache2 v2 fields"); err != nil {
+				return off, err
+			}
+			ap := &collector.Apache2Stats{}
+			ap.BusyWorkers = int(int32(binary.LittleEndian.Uint32(data[off:]))); off += 4
+			ap.IdleWorkers = int(int32(binary.LittleEndian.Uint32(data[off:]))); off += 4
+			ap.TotalAccesses = binary.LittleEndian.Uint64(data[off:]); off += 8
+			ap.TotalKBytes = binary.LittleEndian.Uint64(data[off:]); off += 8
+			ap.AccessesPS = getF32(data[off:]); off += 4
+			ap.KBytesPS = getF32(data[off:]); off += 4
+			ap.ReqPerSec = getF32(data[off:]); off += 4
+			ap.BytesPerSec = getF32(data[off:]); off += 4
+			ap.BytesPerReq = getF32(data[off:]); off += 4
+			ap.CPULoad = getF32(data[off:]); off += 4
+			ap.Uptime = int64(binary.LittleEndian.Uint64(data[off:])); off += 8
+			ap.Waiting = int(int32(binary.LittleEndian.Uint32(data[off:]))); off += 4
+			ap.Reading = int(int32(binary.LittleEndian.Uint32(data[off:]))); off += 4
+			ap.Sending = int(int32(binary.LittleEndian.Uint32(data[off:]))); off += 4
+			ap.Keepalive = int(int32(binary.LittleEndian.Uint32(data[off:]))); off += 4
+			ap.Starting = int(int32(binary.LittleEndian.Uint32(data[off:]))); off += 4
+			ap.DNS = int(int32(binary.LittleEndian.Uint32(data[off:]))); off += 4
+			ap.Closing = int(int32(binary.LittleEndian.Uint32(data[off:]))); off += 4
+			ap.Logging = int(int32(binary.LittleEndian.Uint32(data[off:]))); off += 4
+			ap.Graceful = int(int32(binary.LittleEndian.Uint32(data[off:]))); off += 4
+			ap.IdleCleanup = int(int32(binary.LittleEndian.Uint32(data[off:]))); off += 4
+			ap.OpenSlots = int(int32(binary.LittleEndian.Uint32(data[off:]))); off += 4
+			s.Apps.Apache2 = ap
+		}
 	}
 
 	// Custom metrics

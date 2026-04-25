@@ -191,14 +191,14 @@ func TestDecodeOldAggregatedRecord(t *testing.T) {
 	now := time.Now().Truncate(time.Millisecond)
 	sample := makeSampleFull(now)
 
-	// Encode a single block's variable section (includes 6 bytes of app metrics).
+	// Encode a single block's variable section (includes 8 bytes of app metrics).
 	varBuf, err := appendVariable(nil, sample.Data)
 	if err != nil {
 		t.Fatalf("appendVariable: %v", err)
 	}
 
 	// An empty-apps variable section has exactly 8 trailing bytes:
-	// 1 (nginx=0) + 1 (apache2=0) + 2 (containers=0) + 1 (postgres=0) + 1 (mysql=0) + 2 (custom=0).
+	// 1 (nginx=0) + 2 (containers=0) + 1 (postgres=0) + 1 (mysql=0) + 1 (apache2=0) + 2 (custom=0).
 	const emptyAppsSize = 8
 	oldVarBuf := varBuf[:len(varBuf)-emptyAppsSize]
 
@@ -210,7 +210,7 @@ func TestDecodeOldAggregatedRecord(t *testing.T) {
 	// With hasApps=false, decodeVariable must consume only sections 1-6
 	// and NOT touch the trailing 218 bytes.
 	target := &collector.Sample{}
-	n, err := decodeVariable(padded, target, false)
+	n, err := decodeVariable(padded, target, false, false)
 	if err != nil {
 		t.Fatalf("decodeVariable(hasApps=false) error: %v", err)
 	}
@@ -306,8 +306,11 @@ func TestDecodePostgresV1Block(t *testing.T) {
 
 	// Build a v1-format variable buffer:
 	// everything before postgres + presence=1 + 56 bytes of v1 data + custom section.
+	// Note: varBuf now includes the Apache2 byte (between nginx and containers)
+	// because appendVariable always writes it. We decode with hasApache2=true
+	// so the decoder matches the encoder layout.
 	var v1Var []byte
-	v1Var = append(v1Var, varBuf[:pgOff]...)  // up to postgres presence
+	v1Var = append(v1Var, varBuf[:pgOff]...)  // up to postgres presence (includes Apache2 byte)
 	v1Var = append(v1Var, 1)                   // v1 presence tag
 	// 56-byte v1 block: 3×int32 + 7×float32 + 2×int64
 	var pb [56]byte
@@ -329,7 +332,7 @@ func TestDecodePostgresV1Block(t *testing.T) {
 
 	// Decode the v1-format variable section
 	target := &collector.Sample{}
-	_, err = decodeVariable(v1Var, target, true)
+	_, err = decodeVariable(v1Var, target, true, true)
 	if err != nil {
 		t.Fatalf("decodeVariable(v1 postgres) error: %v", err)
 	}

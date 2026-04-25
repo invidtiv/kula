@@ -45,7 +45,7 @@ func (c *Collector) collectApache2(elapsed float64) *Apache2Stats {
 		return nil
 	}
 
-	body, err := io.ReadAll(io.LimitReader(resp.Body, 4096))
+	body, err := io.ReadAll(io.LimitReader(resp.Body, 65536))
 	if err != nil {
 		c.debugf("[apache2] read error: %v", err)
 		return nil
@@ -142,19 +142,35 @@ func (c *Collector) parseApache2Status(body string, elapsed float64) *Apache2Sta
 			switch ch {
 			case '_':
 				stats.Waiting++
+			case 'S':
+				stats.Starting++
 			case 'R':
 				stats.Reading++
 			case 'W':
 				stats.Sending++
 			case 'K':
 				stats.Keepalive++
+			case 'D':
+				stats.DNS++
+			case 'C':
+				stats.Closing++
+			case 'L':
+				stats.Logging++
+			case 'G':
+				stats.Graceful++
+			case 'I':
+				stats.IdleCleanup++
+			case '.':
+				stats.OpenSlots++
 			}
 		}
 	}
 
-	c.debugf("[apache2] parsed: busy=%d idle=%d accesses=%d kbytes=%d rps=%.2f bps=%.2f waiting=%d reading=%d sending=%d keepalive=%d",
+	c.debugf("[apache2] parsed: busy=%d idle=%d accesses=%d kbytes=%d rps=%.2f bps=%.2f W=%d R=%d S=%d K=%d D=%d C=%d L=%d G=%d I=%d .=%d",
 		stats.BusyWorkers, stats.IdleWorkers, stats.TotalAccesses, stats.TotalKBytes,
-		stats.ReqPerSec, stats.BytesPerSec, stats.Waiting, stats.Reading, stats.Sending, stats.Keepalive)
+		stats.ReqPerSec, stats.BytesPerSec,
+		stats.Waiting, stats.Reading, stats.Sending, stats.Keepalive,
+		stats.DNS, stats.Closing, stats.Logging, stats.Graceful, stats.IdleCleanup, stats.OpenSlots)
 
 	if stats.TotalAccesses == 0 && stats.BusyWorkers == 0 && stats.IdleWorkers == 0 {
 		return nil
