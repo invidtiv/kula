@@ -17,6 +17,7 @@ const APP_ORDER_NGINX = 10;
 const APP_ORDER_APACHE2 = 15;
 const APP_ORDER_CONTAINERS = 20;
 const APP_ORDER_POSTGRES = 30;
+const APP_ORDER_MYSQL = 35;
 const APP_ORDER_CUSTOM = 40;
 
 // createAppChartCard creates a chart-card DOM structure in the applications
@@ -574,6 +575,95 @@ export function addSampleToCharts(item, ts) {
             state.charts.apache2States.data.datasets[10].data.push(point(a.open_slots));
             const sub = document.getElementById('apache2-states-subtitle');
             if (sub) sub.textContent = `Busy: ${a.busy_workers}  Idle: ${a.idle_workers}  Slots: ${a.open_slots}`;
+        }
+    }
+
+    // MySQL — create charts on first data
+    if (s.apps?.mysql) {
+        const m = s.apps.mysql;
+        appsVisible = true;
+
+        // 1. Connection States
+        if (!state.charts.mysqlConn) {
+            createAppChartCard('card-mysql-connections', 'chart-mysql-connections', 'mysql-conn-subtitle', 'MySQL \u2014 Connection States', APP_ORDER_MYSQL);
+            state.charts.mysqlConn = createTimeSeriesChart('chart-mysql-connections', [
+                { label: 'Connected',      borderColor: colors.blue,   backgroundColor: colors.blueAlpha,   fill: true,  data: [] },
+                { label: 'Running',         borderColor: colors.green,  backgroundColor: colors.greenAlpha,  fill: true,  data: [] },
+                { label: 'Cached',          borderColor: colors.yellow, backgroundColor: colors.yellowAlpha, fill: true,  data: [] },
+                { label: 'Max Connections', borderColor: colors.purple, data: [], fill: false, borderDash: [4, 2] },
+            ]);
+        }
+        if (state.charts.mysqlConn) {
+            state.charts.mysqlConn.data.datasets[0].data.push(point(m.threads_connected));
+            state.charts.mysqlConn.data.datasets[1].data.push(point(m.threads_running));
+            state.charts.mysqlConn.data.datasets[2].data.push(point(m.threads_cached));
+            state.charts.mysqlConn.data.datasets[3].data.push(point(m.max_conns));
+            const sub = document.getElementById('mysql-conn-subtitle');
+            if (sub) sub.textContent = `Connected: ${m.threads_connected}  Running: ${m.threads_running}  Cached: ${m.threads_cached}  Max: ${m.max_conns}`;
+        }
+
+        // 2. Queries per Second
+        if (!state.charts.mysqlQPS) {
+            createAppChartCard('card-mysql-queries', 'chart-mysql-queries', 'mysql-qps-subtitle', 'MySQL \u2014 Queries/s', APP_ORDER_MYSQL + 1);
+            state.charts.mysqlQPS = createTimeSeriesChart('chart-mysql-queries', [
+                { label: 'Queries/s',  borderColor: colors.blue,   backgroundColor: colors.blueAlpha, fill: true, data: [] },
+                { label: 'Select/s',   borderColor: colors.green,  data: [], fill: false },
+                { label: 'Insert/s',   borderColor: colors.cyan,   data: [], fill: false },
+                { label: 'Update/s',   borderColor: colors.orange, data: [], fill: false },
+                { label: 'Delete/s',   borderColor: colors.red,    data: [], fill: false },
+            ]);
+        }
+        if (state.charts.mysqlQPS) {
+            state.charts.mysqlQPS.data.datasets[0].data.push(point(m.queries_ps));
+            state.charts.mysqlQPS.data.datasets[1].data.push(point(m.select_ps));
+            state.charts.mysqlQPS.data.datasets[2].data.push(point(m.insert_ps));
+            state.charts.mysqlQPS.data.datasets[3].data.push(point(m.update_ps));
+            state.charts.mysqlQPS.data.datasets[4].data.push(point(m.delete_ps));
+            const sub = document.getElementById('mysql-qps-subtitle');
+            if (sub) sub.textContent = `QPS: ${(m.queries_ps || 0).toFixed(1)}  Sel: ${(m.select_ps || 0).toFixed(1)}  Ins: ${(m.insert_ps || 0).toFixed(1)}`;
+        }
+
+        // 3. Slow Queries
+        if (!state.charts.mysqlSlow) {
+            createAppChartCard('card-mysql-slow', 'chart-mysql-slow', 'mysql-slow-subtitle', 'MySQL \u2014 Slow Queries/s', APP_ORDER_MYSQL + 2);
+            state.charts.mysqlSlow = createTimeSeriesChart('chart-mysql-slow', [
+                { label: 'Slow Queries/s', borderColor: colors.red, backgroundColor: colors.redAlpha, fill: true, data: [] },
+            ]);
+        }
+        if (state.charts.mysqlSlow) {
+            state.charts.mysqlSlow.data.datasets[0].data.push(point(m.slow_queries_ps));
+            const sub = document.getElementById('mysql-slow-subtitle');
+            if (sub) sub.textContent = `Slow: ${(m.slow_queries_ps || 0).toFixed(2)}`;
+        }
+
+        // 4. InnoDB Buffer Pool
+        if (!state.charts.mysqlInnoDB) {
+            createAppChartCard('card-mysql-innodb', 'chart-mysql-innodb', 'mysql-innodb-subtitle', 'MySQL \u2014 InnoDB Buffer Pool', APP_ORDER_MYSQL + 3);
+            state.charts.mysqlInnoDB = createTimeSeriesChart('chart-mysql-innodb', [
+                { label: 'Hit %',      borderColor: colors.green, backgroundColor: colors.greenAlpha, fill: true, data: [] },
+                { label: 'Reads/s',    borderColor: colors.orange, data: [], fill: false },
+            ], { ticks: { callback: v => v.toFixed(1) + '%' } });
+        }
+        if (state.charts.mysqlInnoDB) {
+            state.charts.mysqlInnoDB.data.datasets[0].data.push(point(m.innodb_buffer_pool_hit_pct));
+            state.charts.mysqlInnoDB.data.datasets[1].data.push(point(m.innodb_bp_reads_ps));
+            const sub = document.getElementById('mysql-innodb-subtitle');
+            if (sub) sub.textContent = `Hit: ${(m.innodb_buffer_pool_hit_pct || 0).toFixed(1)}%  Reads/s: ${(m.innodb_bp_reads_ps || 0).toFixed(0)}`;
+        }
+
+        // 5. Lock Waits
+        if (!state.charts.mysqlLocks) {
+            createAppChartCard('card-mysql-locks', 'chart-mysql-locks', 'mysql-locks-subtitle', 'MySQL \u2014 Lock Waits/s', APP_ORDER_MYSQL + 4);
+            state.charts.mysqlLocks = createTimeSeriesChart('chart-mysql-locks', [
+                { label: 'Table Lock Waits/s', borderColor: colors.orange, backgroundColor: colors.orangeAlpha, fill: true,  data: [] },
+                { label: 'Row Lock Waits/s',   borderColor: colors.red,    data: [], fill: false },
+            ]);
+        }
+        if (state.charts.mysqlLocks) {
+            state.charts.mysqlLocks.data.datasets[0].data.push(point(m.table_locks_waited_ps));
+            state.charts.mysqlLocks.data.datasets[1].data.push(point(m.row_lock_waits_ps));
+            const sub = document.getElementById('mysql-locks-subtitle');
+            if (sub) sub.textContent = `Table: ${(m.table_locks_waited_ps || 0).toFixed(2)}  Row: ${(m.row_lock_waits_ps || 0).toFixed(2)}`;
         }
     }
 
