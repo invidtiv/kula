@@ -17,8 +17,8 @@ const APP_ORDER_NGINX = 10;
 const APP_ORDER_APACHE2 = 15;
 const APP_ORDER_CONTAINERS = 20;
 const APP_ORDER_POSTGRES = 30;
-const APP_ORDER_MYSQL = 35;
-const APP_ORDER_CUSTOM = 40;
+const APP_ORDER_MYSQL = 38;
+const APP_ORDER_CUSTOM = 50;
 
 // createAppChartCard creates a chart-card DOM structure in the applications
 // grid and returns the canvas ID for use with createTimeSeriesChart.

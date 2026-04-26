@@ -30,7 +30,12 @@ type apache2Raw struct {
 //	Scoreboard: _W___R___................................................
 func (c *Collector) collectApache2(elapsed float64) *Apache2Stats {
 	if c.apacheClient == nil {
-		c.apacheClient = &http.Client{Timeout: c.collCfg.Interval}
+		c.apacheClient = &http.Client{
+			Timeout: c.collCfg.Interval,
+			CheckRedirect: func(req *http.Request, via []*http.Request) error {
+				return http.ErrUseLastResponse
+			},
+		}
 	}
 
 	resp, err := c.apacheClient.Get(c.appCfg.Apache2.StatusURL)

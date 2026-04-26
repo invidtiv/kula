@@ -84,6 +84,25 @@ func (s *Sample) FormatForAI() string {
 			fmt.Fprintf(&sb, "    ... (%d more)\n", n-aiMaxItems)
 		}
 	}
+
+	if s.Apps.Apache2 != nil {
+		fmt.Fprintf(&sb, "  Apache2:\n")
+		fmt.Fprintf(&sb, "    Workers: %d busy, %d idle\n",
+			s.Apps.Apache2.BusyWorkers, s.Apps.Apache2.IdleWorkers)
+		fmt.Fprintf(&sb, "    Traffic: %.1f req/s, %.1f kB/s\n",
+			s.Apps.Apache2.ReqPerSec, s.Apps.Apache2.BytesPerSec/1024)
+	}
+
+	if s.Apps.Mysql != nil {
+		fmt.Fprintf(&sb, "  MySQL:\n")
+		fmt.Fprintf(&sb, "    Connections: %d connected, %d running, %d max\n",
+			s.Apps.Mysql.ThreadsConnected, s.Apps.Mysql.ThreadsRunning, s.Apps.Mysql.MaxConnections)
+		fmt.Fprintf(&sb, "    Traffic: %.1f qps (%.1f slow/s)\n",
+			s.Apps.Mysql.QueriesPS, s.Apps.Mysql.SlowQueriesPS)
+		fmt.Fprintf(&sb, "    InnoDB: %.1f%% buffer pool hit\n",
+			s.Apps.Mysql.InnodbBufferPoolHitPct)
+	}
+
 	return sb.String()
 }
 
