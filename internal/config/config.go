@@ -76,6 +76,32 @@ type WebConfig struct {
 	Arch               string      `yaml:"-"`
 	MaxWebsocketConns  int         `yaml:"max_websocket_conns"`
 	MaxWebsocketConnsPerIP int         `yaml:"max_websocket_conns_per_ip"`
+	Security           SecurityConfig `yaml:"security"`
+}
+
+// SecurityConfig groups HTTP security features that can be relaxed for
+// deployments behind a trusted reverse proxy, embedded in an iframe, or
+// accessed from another origin via a browser. Defaults keep the original
+// hardened behavior unchanged.
+type SecurityConfig struct {
+	// Headers controls whether response security headers
+	// (Content-Security-Policy, X-Content-Type-Options, Referrer-Policy,
+	// Permissions-Policy, Strict-Transport-Security) are emitted. Default true.
+	Headers bool `yaml:"headers"`
+	// FrameProtection controls whether Kula is protected from being rendered
+	// inside an <iframe>. When true (default), X-Frame-Options: DENY is sent
+	// and CSP includes "frame-ancestors 'none'". Set to false to allow
+	// embedding Kula in an iframe.
+	FrameProtection bool `yaml:"frame_protection"`
+	// OriginValidation controls the same-origin Origin/Referer check on
+	// state-changing HTTP requests and the WebSocket upgrade origin check.
+	// Default true.
+	OriginValidation bool `yaml:"origin_validation"`
+	// AllowedOrigins is a list of exact origin URLs (scheme + host[:port])
+	// allowed to access the API cross-origin. When non-empty Kula emits CORS
+	// response headers for matching origins, accepts them in
+	// OriginValidation, and switches session cookies to SameSite=None;Secure.
+	AllowedOrigins []string `yaml:"allowed_origins"`
 }
 
 type MetricsConfig struct {
@@ -289,6 +315,11 @@ func DefaultConfig() *Config {
 			},
 			MaxWebsocketConns:      100,
 			MaxWebsocketConnsPerIP: 5,
+			Security: SecurityConfig{
+				Headers:          true,
+				FrameProtection:  true,
+				OriginValidation: true,
+			},
 		},
 		Applications: ApplicationsConfig{
 			Nginx: NginxConfig{

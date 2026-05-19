@@ -14,7 +14,7 @@ import (
 )
 
 func TestTemplateInjection(t *testing.T) {
-	s := NewServer(config.WebConfig{}, config.GlobalConfig{}, nil, nil, t.TempDir(), config.OllamaConfig{})
+	s := NewServer(config.WebConfig{Security: config.SecurityConfig{Headers: true, OriginValidation: true}}, config.GlobalConfig{}, nil, nil, t.TempDir(), config.OllamaConfig{})
 	
 	// Create a recorder to capture the response
 	rec := httptest.NewRecorder()
@@ -59,7 +59,7 @@ func TestTemplateInjection(t *testing.T) {
 }
 
 func TestGameTemplateInjection(t *testing.T) {
-	s := NewServer(config.WebConfig{}, config.GlobalConfig{}, nil, nil, t.TempDir(), config.OllamaConfig{})
+	s := NewServer(config.WebConfig{Security: config.SecurityConfig{Headers: true, OriginValidation: true}}, config.GlobalConfig{}, nil, nil, t.TempDir(), config.OllamaConfig{})
 	
 	rec := httptest.NewRecorder()
 	req := httptest.NewRequest("GET", "/game.html", nil)
@@ -179,7 +179,7 @@ func TestCreateUnixListenerRefusesLive(t *testing.T) {
 }
 
 func TestHandleHealth(t *testing.T) {
-	s := NewServer(config.WebConfig{}, config.GlobalConfig{}, nil, nil, t.TempDir(), config.OllamaConfig{})
+	s := NewServer(config.WebConfig{Security: config.SecurityConfig{Headers: true, OriginValidation: true}}, config.GlobalConfig{}, nil, nil, t.TempDir(), config.OllamaConfig{})
 
 	for _, path := range []string{"/health", "/status"} {
 		t.Run(path, func(t *testing.T) {

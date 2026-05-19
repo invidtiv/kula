@@ -85,6 +85,31 @@ web:
   # Trust X-Forwarded-Proto headers from reverse proxies for the Secure cookie flag
   trust_proxy: false
 
+  # HTTP security features. Defaults preserve the original strict behavior.
+  # Relax these to embed Kula in an <iframe> or access it from another origin.
+  security:
+    # Emit security response headers (CSP, X-Content-Type-Options,
+    # Referrer-Policy, Permissions-Policy, Strict-Transport-Security).
+    headers: true
+    # Prevent rendering Kula inside an <iframe>. When true: sends
+    # X-Frame-Options: DENY and the CSP frame-ancestors 'none' directive.
+    # Set to false to allow iframe embedding.
+    frame_protection: true
+    # Reject state-changing HTTP requests and WebSocket upgrades whose
+    # Origin/Referer does not match the request Host. Listed origins in
+    # allowed_origins are also accepted. Disable only if you protect the
+    # API some other way (e.g. CSRF tokens + token-auth headers).
+    origin_validation: true
+    # Allow cross-origin browser access from these exact origins.
+    # When non-empty:
+    #   - CORS response headers are sent for matching origins
+    #   - listed origins also pass origin_validation
+    #   - session cookies switch to SameSite=None;Secure (requires HTTPS
+    #     or trust_proxy + X-Forwarded-Proto: https)
+    # allowed_origins:
+    #   - https://app.example.com
+    #   - https://dashboard.example.com
+
   # Join data points across gaps in the graphs (default: false)
   # When false, gaps between measurements are displayed as empty space
   join_metrics: false

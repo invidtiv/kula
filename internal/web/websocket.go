@@ -5,6 +5,7 @@ import (
 	"log"
 	"net/http"
 	"net/url"
+	"strings"
 	"sync"
 	"time"
 
@@ -18,33 +19,50 @@ type wsClient struct {
 	mu     sync.Mutex
 }
 
-var upgrader = websocket.Upgrader{
-	ReadBufferSize:  1024,
-	WriteBufferSize: 1024,
-	CheckOrigin: func(r *http.Request) bool {
-		origin := r.Header.Get("Origin")
-		if origin == "" {
-			// Explicitly allow non-browser clients (like CLI tools) which omit the Origin
-			// header. Browsers always send an Origin header for WebSocket connections.
-			return true
-		}
+// newUpgrader builds a websocket.Upgrader whose CheckOrigin closure reads
+// the server's security configuration. Defaults preserve the original
+// strict host-match behavior; OriginValidation=false disables the check
+// entirely; AllowedOrigins entries are accepted in addition to same-host.
+func (s *Server) newUpgrader() websocket.Upgrader {
+	return websocket.Upgrader{
+		ReadBufferSize:  1024,
+		WriteBufferSize: 1024,
+		CheckOrigin: func(r *http.Request) bool {
+			if !s.cfg.Security.OriginValidation {
+				return true
+			}
 
-		// Parse the Origin header securely using net/url to prevent crafted origin bypasses.
-		u, err := url.ParseRequestURI(origin)
-		if err != nil {
-			log.Printf("WebSocket upgrade blocked: invalid Origin header format (%v)", err)
+			origin := r.Header.Get("Origin")
+			if origin == "" {
+				// Explicitly allow non-browser clients (like CLI tools) which omit the Origin
+				// header. Browsers always send an Origin header for WebSocket connections.
+				return true
+			}
+
+			// Parse the Origin header securely using net/url to prevent crafted origin bypasses.
+			u, err := url.ParseRequestURI(origin)
+			if err != nil {
+				log.Printf("WebSocket upgrade blocked: invalid Origin header format (%v)", err)
+				return false
+			}
+
+			// Same-host match: prevents Cross-Site WebSocket Hijacking (CSWSH).
+			if u.Host == r.Host {
+				return true
+			}
+
+			// Accept origins explicitly allow-listed for cross-origin access.
+			originScheme := strings.ToLower(u.Scheme) + "://" + strings.ToLower(u.Host)
+			for _, allowed := range s.cfg.Security.AllowedOrigins {
+				if strings.EqualFold(originScheme, allowed) {
+					return true
+				}
+			}
+
+			log.Printf("WebSocket upgrade blocked: Origin (%s) does not match Host (%s) and is not in allowed_origins", u.Host, r.Host)
 			return false
-		}
-
-		// Require the origin host to match the request host exactly (ignores scheme, but checks domain and port).
-		// Note: This prevents Cross-Site WebSocket Hijacking (CSWSH).
-		if u.Host != r.Host {
-			log.Printf("WebSocket upgrade blocked: Origin (%s) does not match Host (%s)", u.Host, r.Host)
-			return false
-		}
-
-		return true
-	},
+		},
+	}
 }
 
 func (s *Server) handleWebSocket(w http.ResponseWriter, r *http.Request) {
@@ -67,7 +85,7 @@ func (s *Server) handleWebSocket(w http.ResponseWriter, r *http.Request) {
 	s.wsIPCounts[ip]++
 	s.wsMu.Unlock()
 
-	upg := upgrader
+	upg := s.newUpgrader()
 	upg.EnableCompression = s.cfg.EnableCompression
 
 	conn, err := upg.Upgrade(w, r, nil)

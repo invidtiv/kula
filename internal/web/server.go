@@ -57,7 +57,7 @@ func NewServer(cfg config.WebConfig, global config.GlobalConfig, c *collector.Co
 		global:        global,
 		collector:     c,
 		store:         s,
-		auth:          NewAuthManager(cfg.Auth, storageDir, cfg.TrustProxy),
+		auth:          NewAuthManager(cfg.Auth, storageDir, cfg.TrustProxy, cfg.Security),
 		hub:           newWSHub(),
 		sriHashes:     make(map[string]string),
 		wsIPCounts:    make(map[string]int),
@@ -198,22 +198,88 @@ func (s *Server) securityMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		b := make([]byte, 16)
 		_, _ = rand.Read(b)
-		// Nonce for CloudFlare's JS challenge
+		// Nonce for CloudFlare's JS challenge. Generated unconditionally
+		// because templates read it from the context even when security
+		// response headers are disabled.
 		nonce := base64.StdEncoding.EncodeToString(b)
-
-		// Inject nonce into context
 		ctx := context.WithValue(r.Context(), nonceKey, nonce)
 
-		w.Header().Set("X-Content-Type-Options", "nosniff")
-		w.Header().Set("X-Frame-Options", "DENY")
-		w.Header().Set("Content-Security-Policy", fmt.Sprintf("default-src 'self'; script-src 'self' 'nonce-%s'; style-src 'self' 'unsafe-inline'; frame-ancestors 'none';", nonce))
-		w.Header().Set("Referrer-Policy", "strict-origin-when-cross-origin")
-		w.Header().Set("Permissions-Policy", "geolocation=(), microphone=(), camera=()")
-		if r.TLS != nil || (s.cfg.TrustProxy && r.Header.Get("X-Forwarded-Proto") == "https") {
-			w.Header().Set("Strict-Transport-Security", "max-age=31536000; includeSubDomains")
+		if s.cfg.Security.Headers {
+			w.Header().Set("X-Content-Type-Options", "nosniff")
+			if s.cfg.Security.FrameProtection {
+				w.Header().Set("X-Frame-Options", "DENY")
+			}
+			csp := fmt.Sprintf("default-src 'self'; script-src 'self' 'nonce-%s'; style-src 'self' 'unsafe-inline';", nonce)
+			if s.cfg.Security.FrameProtection {
+				csp += " frame-ancestors 'none';"
+			}
+			w.Header().Set("Content-Security-Policy", csp)
+			w.Header().Set("Referrer-Policy", "strict-origin-when-cross-origin")
+			w.Header().Set("Permissions-Policy", "geolocation=(), microphone=(), camera=()")
+			if r.TLS != nil || (s.cfg.TrustProxy && r.Header.Get("X-Forwarded-Proto") == "https") {
+				w.Header().Set("Strict-Transport-Security", "max-age=31536000; includeSubDomains")
+			}
 		}
 		next.ServeHTTP(w, r.WithContext(ctx))
 	})
+}
+
+// isAllowedOrigin reports whether origin (an exact "scheme://host[:port]"
+// string from the Origin header) is listed in Security.AllowedOrigins.
+func (s *Server) isAllowedOrigin(origin string) bool {
+	if origin == "" {
+		return false
+	}
+	for _, allowed := range s.cfg.Security.AllowedOrigins {
+		if strings.EqualFold(origin, allowed) {
+			return true
+		}
+	}
+	return false
+}
+
+// corsMiddleware emits CORS response headers when the request Origin
+// matches one of Security.AllowedOrigins, and short-circuits OPTIONS
+// preflight requests with 204. When AllowedOrigins is empty it is a
+// passthrough.
+func (s *Server) corsMiddleware(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if len(s.cfg.Security.AllowedOrigins) > 0 {
+			// Always emit Vary: Origin so shared caches do not serve a
+			// response with CORS headers (cached for an allowed origin) to
+			// a request from a different origin.
+			w.Header().Add("Vary", "Origin")
+			origin := r.Header.Get("Origin")
+			if s.isAllowedOrigin(origin) {
+				w.Header().Set("Access-Control-Allow-Origin", origin)
+				w.Header().Set("Access-Control-Allow-Credentials", "true")
+				w.Header().Set("Access-Control-Allow-Headers", "Content-Type, X-CSRF-Token, Authorization")
+				w.Header().Set("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS")
+			}
+			if r.Method == http.MethodOptions && origin != "" {
+				if s.isAllowedOrigin(origin) {
+					w.WriteHeader(http.StatusNoContent)
+				} else {
+					w.WriteHeader(http.StatusForbidden)
+				}
+				return
+			}
+		}
+		next.ServeHTTP(w, r)
+	})
+}
+
+// sessionCookieSameSite returns the SameSite mode and Secure flag to use
+// for session-related cookies. When AllowedOrigins is non-empty, browsers
+// will only attach cookies on cross-origin requests if SameSite=None and
+// Secure are both set, so we force them. Otherwise we use the default
+// SameSite=Strict and derive Secure from the TLS/proxy state of the request.
+func (s *Server) sessionCookieSameSite(r *http.Request) (http.SameSite, bool) {
+	tlsSecure := r.TLS != nil || (s.cfg.TrustProxy && r.Header.Get("X-Forwarded-Proto") == "https")
+	if len(s.cfg.Security.AllowedOrigins) > 0 {
+		return http.SameSiteNoneMode, true
+	}
+	return http.SameSiteStrictMode, tlsSecure
 }
 
 func (s *Server) Start() error {
@@ -225,6 +291,16 @@ func (s *Server) Start() error {
 	}
 	if s.cfg.TrustProxy {
 		log.Printf("Security Note: TrustProxy is enabled. Ensure Kula is behind a trusted reverse proxy that handles X-Forwarded-For.")
+	}
+
+	if len(s.cfg.Security.AllowedOrigins) > 0 {
+		log.Printf("Security Note: web.security.allowed_origins is set (%d origin(s)); session cookies will be issued with SameSite=None; Secure.", len(s.cfg.Security.AllowedOrigins))
+		if !s.cfg.TrustProxy {
+			log.Printf("Security Warning: allowed_origins requires HTTPS for cross-origin auth. Without TLS or trust_proxy, browsers will reject SameSite=None;Secure cookies and cross-origin login will silently fail.")
+		}
+		if !s.cfg.Security.OriginValidation && !s.cfg.Auth.Enabled {
+			log.Printf("Security Warning: allowed_origins is set, origin_validation is disabled, and auth is disabled. The API has no CSRF protection and will accept state-changing requests from any cross-origin page the browser loads.")
+		}
 	}
 
 	mux := http.NewServeMux()
@@ -242,22 +318,26 @@ func (s *Server) Start() error {
 	apiMux.HandleFunc("/api/ollama/models", s.handleOllamaModels)
 	apiMux.HandleFunc("/api/ollama/context", s.handleOllamaContext)
 
-	// Wrap apiMux with logging and CSRF protection
+	// Wrap apiMux with logging and CSRF protection.
 	loggedApiMux := s.auth.CSRFMiddleware(loggingMiddleware(s.cfg, apiMux))
 
-	// Register /ws separately and explicitly through auth, CSRF and logging
-	wsHandler := s.auth.AuthMiddleware(
-		s.auth.CSRFMiddleware(
-			loggingMiddleware(s.cfg, http.HandlerFunc(s.handleWebSocket)),
+	// Register /ws separately and explicitly through CORS, auth, CSRF and logging.
+	// CORS sits outermost so OPTIONS preflight short-circuits before auth/CSRF.
+	wsHandler := s.corsMiddleware(
+		s.auth.AuthMiddleware(
+			s.auth.CSRFMiddleware(
+				loggingMiddleware(s.cfg, http.HandlerFunc(s.handleWebSocket)),
+			),
 		),
 	)
 
 	if s.cfg.UI {
-		// Apply auth to API routes (except login and auth status)
-		mux.Handle("/api/login", loggedApiMux)
-		mux.Handle("/api/logout", loggedApiMux)
-		mux.Handle("/api/auth/status", loggedApiMux)
-		mux.Handle("/api/", s.auth.AuthMiddleware(loggedApiMux))
+		// CORS sits outermost on every /api route so OPTIONS preflight
+		// short-circuits before auth/CSRF reject it.
+		mux.Handle("/api/login", s.corsMiddleware(loggedApiMux))
+		mux.Handle("/api/logout", s.corsMiddleware(loggedApiMux))
+		mux.Handle("/api/auth/status", s.corsMiddleware(loggedApiMux))
+		mux.Handle("/api/", s.corsMiddleware(s.auth.AuthMiddleware(loggedApiMux)))
 		mux.Handle("/ws", wsHandler)
 
 		// Templated HTML files
@@ -675,14 +755,15 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	sameSite, secure := s.sessionCookieSameSite(r)
 	http.SetCookie(w, &http.Cookie{
 		Name:     "kula_session",
 		Value:    token,
 		Path:     "/",
 		HttpOnly: true,
-		Secure:   r.TLS != nil || (s.cfg.TrustProxy && r.Header.Get("X-Forwarded-Proto") == "https"),
+		Secure:   secure,
 		MaxAge:   int(s.cfg.Auth.SessionTimeout.Seconds()),
-		SameSite: http.SameSiteStrictMode,
+		SameSite: sameSite,
 	})
 
 	csrfToken := s.auth.GetCSRFToken(token)
@@ -708,14 +789,15 @@ func (s *Server) handleLogout(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Delete the cookie on the client side
+	sameSite, secure := s.sessionCookieSameSite(r)
 	http.SetCookie(w, &http.Cookie{
 		Name:     "kula_session",
 		Value:    "",
 		Path:     "/",
 		HttpOnly: true,
-		Secure:   r.TLS != nil || (s.cfg.TrustProxy && r.Header.Get("X-Forwarded-Proto") == "https"),
+		Secure:   secure,
 		MaxAge:   -1,
-		SameSite: http.SameSiteStrictMode,
+		SameSite: sameSite,
 	})
 
 	w.WriteHeader(http.StatusOK)

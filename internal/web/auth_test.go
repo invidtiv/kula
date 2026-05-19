@@ -67,7 +67,7 @@ func TestGenerateSalt(t *testing.T) {
 }
 
 func TestValidateCredentialsDisabled(t *testing.T) {
-	am := NewAuthManager(config.AuthConfig{Enabled: false}, "", false)
+	am := NewAuthManager(config.AuthConfig{Enabled: false}, "", false, config.SecurityConfig{OriginValidation: true})
 	if !am.ValidateCredentials("any", "any") {
 		t.Error("With auth disabled, ValidateCredentials should return true")
 	}
@@ -82,7 +82,7 @@ func TestValidateCredentialsCorrect(t *testing.T) {
 		PasswordHash: hash,
 		PasswordSalt: salt,
 		Argon2:       defaultArgonParams,
-	}, "", false)
+	}, "", false, config.SecurityConfig{OriginValidation: true})
 	if !am.ValidateCredentials("admin", "secret") {
 		t.Error("Valid credentials should pass")
 	}
@@ -97,7 +97,7 @@ func TestValidateCredentialsWrong(t *testing.T) {
 		PasswordHash: hash,
 		PasswordSalt: salt,
 		Argon2:       defaultArgonParams,
-	}, "", false)
+	}, "", false, config.SecurityConfig{OriginValidation: true})
 	if am.ValidateCredentials("admin", "wrong") {
 		t.Error("Wrong password should fail")
 	}
@@ -110,7 +110,7 @@ func TestSessionLifecycle(t *testing.T) {
 	am := NewAuthManager(config.AuthConfig{
 		Enabled:        true,
 		SessionTimeout: time.Hour,
-	}, "", false)
+	}, "", false, config.SecurityConfig{OriginValidation: true})
 
 	token, err := am.CreateSession("admin")
 	if err != nil {
@@ -131,7 +131,7 @@ func TestSessionExpiry(t *testing.T) {
 	am := NewAuthManager(config.AuthConfig{
 		Enabled:        true,
 		SessionTimeout: time.Millisecond, // very short timeout
-	}, "", false)
+	}, "", false, config.SecurityConfig{OriginValidation: true})
 
 	token, _ := am.CreateSession("admin")
 	time.Sleep(5 * time.Millisecond)
@@ -144,7 +144,7 @@ func TestCleanupSessions(t *testing.T) {
 	am := NewAuthManager(config.AuthConfig{
 		Enabled:        true,
 		SessionTimeout: time.Millisecond,
-	}, "", false)
+	}, "", false, config.SecurityConfig{OriginValidation: true})
 
 	_, _ = am.CreateSession("user1")
 	_, _ = am.CreateSession("user2")
@@ -161,7 +161,7 @@ func TestCleanupSessions(t *testing.T) {
 }
 
 func TestAuthMiddlewareDisabled(t *testing.T) {
-	am := NewAuthManager(config.AuthConfig{Enabled: false}, "", false)
+	am := NewAuthManager(config.AuthConfig{Enabled: false}, "", false, config.SecurityConfig{OriginValidation: true})
 	handler := am.AuthMiddleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	}))
@@ -179,7 +179,7 @@ func TestAuthMiddlewareNoToken(t *testing.T) {
 	am := NewAuthManager(config.AuthConfig{
 		Enabled:        true,
 		SessionTimeout: time.Hour,
-	}, "", false)
+	}, "", false, config.SecurityConfig{OriginValidation: true})
 	handler := am.AuthMiddleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	}))
@@ -197,7 +197,7 @@ func TestAuthMiddlewareValidCookie(t *testing.T) {
 	am := NewAuthManager(config.AuthConfig{
 		Enabled:        true,
 		SessionTimeout: time.Hour,
-	}, "", false)
+	}, "", false, config.SecurityConfig{OriginValidation: true})
 	token, _ := am.CreateSession("admin")
 
 	handler := am.AuthMiddleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -218,7 +218,7 @@ func TestAuthMiddlewareValidCookieIgnoresClientChanges(t *testing.T) {
 	am := NewAuthManager(config.AuthConfig{
 		Enabled:        true,
 		SessionTimeout: time.Hour,
-	}, "", false)
+	}, "", false, config.SecurityConfig{OriginValidation: true})
 	token, _ := am.CreateSession("admin")
 
 	handler := am.AuthMiddleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -241,7 +241,7 @@ func TestAuthMiddlewareBearerToken(t *testing.T) {
 	am := NewAuthManager(config.AuthConfig{
 		Enabled:        true,
 		SessionTimeout: time.Hour,
-	}, "", false)
+	}, "", false, config.SecurityConfig{OriginValidation: true})
 	token, _ := am.CreateSession("admin")
 
 	handler := am.AuthMiddleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -264,7 +264,7 @@ func TestSessionHashingOnDisk(t *testing.T) {
 	am := NewAuthManager(config.AuthConfig{
 		Enabled:        true,
 		SessionTimeout: time.Hour,
-	}, tmpDir, false)
+	}, tmpDir, false, config.SecurityConfig{OriginValidation: true})
 
 	token, err := am.CreateSession("admin")
 	if err != nil {
@@ -303,7 +303,7 @@ func TestLoadSessionsLegacyFingerprintFields(t *testing.T) {
 	am := NewAuthManager(config.AuthConfig{
 		Enabled:        true,
 		SessionTimeout: time.Hour,
-	}, tmpDir, false)
+	}, tmpDir, false, config.SecurityConfig{OriginValidation: true})
 	if err := am.LoadSessions(); err != nil {
 		t.Fatalf("LoadSessions error: %v", err)
 	}
@@ -392,7 +392,7 @@ func TestGetClientIP(t *testing.T) {
 	}
 }
 func TestValidateOrigin(t *testing.T) {
-	am := NewAuthManager(config.AuthConfig{}, "", false)
+	am := NewAuthManager(config.AuthConfig{}, "", false, config.SecurityConfig{OriginValidation: true})
 
 	tests := []struct {
 		name    string
@@ -458,7 +458,7 @@ func TestValidateOrigin(t *testing.T) {
 }
 
 func TestCSRFMiddleware(t *testing.T) {
-	am := NewAuthManager(config.AuthConfig{}, "", false)
+	am := NewAuthManager(config.AuthConfig{}, "", false, config.SecurityConfig{OriginValidation: true})
 	handler := am.CSRFMiddleware(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.WriteHeader(http.StatusOK)
 	}))

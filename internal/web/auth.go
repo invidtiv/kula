@@ -30,6 +30,7 @@ type AuthManager struct {
 	Limiter     *RateLimiter
 	UserLimiter *RateLimiter
 	trustProxy  bool
+	security    config.SecurityConfig
 }
 
 // RateLimiter tracks recent rapid login attempts by IP.
@@ -56,7 +57,7 @@ type sessionData struct {
 	ExpiresAt time.Time `json:"expires_at"`
 }
 
-func NewAuthManager(cfg config.AuthConfig, storageDir string, trustProxy bool) *AuthManager {
+func NewAuthManager(cfg config.AuthConfig, storageDir string, trustProxy bool, security config.SecurityConfig) *AuthManager {
 	return &AuthManager{
 		cfg:        cfg,
 		storageDir: storageDir,
@@ -68,6 +69,7 @@ func NewAuthManager(cfg config.AuthConfig, storageDir string, trustProxy bool) *
 			attempts: make(map[string][]time.Time),
 		},
 		trustProxy: trustProxy,
+		security:   security,
 	}
 }
 
@@ -344,7 +346,8 @@ func generateToken() (string, error) {
 	return hex.EncodeToString(b), nil
 }
 
-// ValidateOrigin checks if the request's Origin or Referer header matches the host.
+// ValidateOrigin checks if the request's Origin or Referer header matches the host,
+// or appears in the configured Security.AllowedOrigins list.
 // This is a defense-in-depth measure against CSRF for state-modifying requests.
 func (a *AuthManager) ValidateOrigin(r *http.Request) bool {
 	origin := r.Header.Get("Origin")
@@ -361,7 +364,18 @@ func (a *AuthManager) ValidateOrigin(r *http.Request) bool {
 		return false
 	}
 
-	return strings.EqualFold(u.Host, r.Host)
+	if strings.EqualFold(u.Host, r.Host) {
+		return true
+	}
+
+	// Accept origins explicitly allow-listed for cross-origin access.
+	originScheme := strings.ToLower(u.Scheme) + "://" + strings.ToLower(u.Host)
+	for _, allowed := range a.security.AllowedOrigins {
+		if strings.EqualFold(originScheme, allowed) {
+			return true
+		}
+	}
+	return false
 }
 
 // CSRFMiddleware enforces origin validation and token matching for state-modifying requests.
@@ -369,7 +383,7 @@ func (a *AuthManager) CSRFMiddleware(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.Method != http.MethodGet && r.Method != http.MethodHead && r.Method != http.MethodOptions {
 			// 1. Origin/Referer Validation (Defense in Depth)
-			if !a.ValidateOrigin(r) {
+			if a.security.OriginValidation && !a.ValidateOrigin(r) {
 				http.Error(w, `{"error":"invalid origin"}`, http.StatusForbidden)
 				return
 			}
