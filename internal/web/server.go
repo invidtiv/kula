@@ -18,6 +18,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -327,7 +328,11 @@ func (s *Server) Start() error {
 
 	errCh := make(chan error, len(listeners))
 	for _, ln := range listeners {
-		log.Printf("Web UI listening on http://%s", ln.Addr())
+		if ln.Addr().Network() == "unix" {
+			log.Printf("Web UI listening on unix:%s", ln.Addr())
+		} else {
+			log.Printf("Web UI listening on http://%s", ln.Addr())
+		}
 		go func(ln net.Listener) {
 			errCh <- s.httpSrv.Serve(ln)
 		}(ln)
@@ -342,12 +347,21 @@ func (s *Server) Start() error {
 // createListeners resolves the configured Listen address into one or two
 // net.Listeners according to the following rules:
 //
-//   - ""        → dual-stack: one tcp4 on 0.0.0.0 + one tcp6 on [::]
-//   - "[::]"    → single tcp6 listener (kernel decides v4/v6 based on net.ipv6.bindv6only)
-//   - "0.0.0.0" → single tcp4 listener (v4 only)
-//   - "1.2.3.4" → single tcp4 listener bound to that address
-//   - "[::1]"   → single tcp6 listener bound to that address
+//   - UnixSocket set → single Unix listener at the configured path; no TCP
+//   - ""             → dual-stack: one tcp4 on 0.0.0.0 + one tcp6 on [::]
+//   - "[::]"         → single tcp6 listener (kernel decides v4/v6 based on net.ipv6.bindv6only)
+//   - "0.0.0.0"      → single tcp4 listener (v4 only)
+//   - "1.2.3.4"      → single tcp4 listener bound to that address
+//   - "[::1]"        → single tcp6 listener bound to that address
 func (s *Server) createListeners() ([]net.Listener, error) {
+	if s.cfg.UnixSocket != "" {
+		ln, err := createUnixListener(s.cfg.UnixSocket, s.cfg.UnixSocketMode)
+		if err != nil {
+			return nil, err
+		}
+		return []net.Listener{ln}, nil
+	}
+
 	port := s.cfg.Port
 	listen := s.cfg.Listen
 
@@ -389,6 +403,64 @@ func (s *Server) createListeners() ([]net.Listener, error) {
 		return nil, fmt.Errorf("listen on %s: %w", addr, err)
 	}
 	return []net.Listener{ln}, nil
+}
+
+// createUnixListener creates a Unix-domain socket listener at the given path,
+// removing any stale socket file from a previous run. If another process is
+// actively listening at the path, it returns an error rather than overwriting.
+// The mode string is parsed as octal (default "0660" when empty).
+func createUnixListener(path, mode string) (net.Listener, error) {
+	if !filepath.IsAbs(path) {
+		return nil, fmt.Errorf("unix_socket must be an absolute path, got %q", path)
+	}
+
+	if err := removeStaleUnixSocket(path); err != nil {
+		return nil, err
+	}
+
+	ln, err := net.Listen("unix", path)
+	if err != nil {
+		return nil, fmt.Errorf("unix listen on %s: %w", path, err)
+	}
+
+	if mode == "" {
+		mode = "0660"
+	}
+	m, err := strconv.ParseUint(mode, 8, 32)
+	if err != nil {
+		_ = ln.Close()
+		return nil, fmt.Errorf("invalid unix_socket_mode %q (expected octal like \"0660\"): %w", mode, err)
+	}
+	if err := os.Chmod(path, os.FileMode(m)); err != nil {
+		log.Printf("Warning: chmod %s to %#o: %v", path, m, err)
+	}
+
+	return ln, nil
+}
+
+// removeStaleUnixSocket removes a leftover socket file from a previous run.
+// It refuses to remove the file if another process is actively listening on
+// it, or if the path exists but is not a socket.
+func removeStaleUnixSocket(path string) error {
+	info, err := os.Stat(path)
+	if os.IsNotExist(err) {
+		return nil
+	}
+	if err != nil {
+		return fmt.Errorf("stat %s: %w", path, err)
+	}
+	if info.Mode()&os.ModeSocket == 0 {
+		return fmt.Errorf("%s exists but is not a Unix socket; refusing to overwrite", path)
+	}
+	// Detect a live listener by attempting to connect.
+	if conn, err := net.DialTimeout("unix", path, time.Second); err == nil {
+		_ = conn.Close()
+		return fmt.Errorf("another process is already listening on %s", path)
+	}
+	if err := os.Remove(path); err != nil {
+		return fmt.Errorf("removing stale socket %s: %w", path, err)
+	}
+	return nil
 }
 
 // Shutdown gracefully stops the web server.

@@ -6,6 +6,7 @@
 # - KULA_LOGLEVEL overrides logging.level
 # - KULA_LISTEN overrides web.listen
 # - KULA_PORT overrides web.port
+# - KULA_UNIX_SOCKET overrides web.unix_socket
 # - KULA_MOUNTS_DETECTION overrides collection.mounts_detection
 
 # Global settings
@@ -65,6 +66,12 @@ web:
 
   listen: "" # use [] brackets for IPv6 addresses, e.g. "[::1]"
   port: 27960
+
+  # Listen on a Unix domain socket instead of a TCP port. When set, the TCP
+  # listener is NOT opened — useful behind a local reverse proxy (nginx).
+  # Must be an absolute path.
+  # unix_socket: /run/kula/kula.sock
+  # unix_socket_mode: "0660"  # octal permissions for the socket file (default: 0660)
 
   # Compress HTTP responses and WebSockets (default: true)
   enable_compression: true

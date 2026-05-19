@@ -59,6 +59,8 @@ type WebConfig struct {
 	UI                 bool        `yaml:"ui"`
 	Listen             string      `yaml:"listen"`
 	Port               int         `yaml:"port"`
+	UnixSocket         string      `yaml:"unix_socket"`      // if set, listen on this Unix socket and do not bind TCP
+	UnixSocketMode     string      `yaml:"unix_socket_mode"` // octal permissions for the socket file (default "0660")
 	Auth               AuthConfig  `yaml:"auth"`
 	PrometheusMetrics  MetricsConfig `yaml:"prometheus_metrics"`
 	JoinMetrics        bool        `yaml:"join_metrics"`
@@ -255,6 +257,8 @@ func DefaultConfig() *Config {
 			UI:                 true,
 			Listen:             "",
 			Port:               27960,
+			UnixSocket:         "",
+			UnixSocketMode:     "0660",
 			PrometheusMetrics: MetricsConfig{
 				Enabled: false,
 			},
@@ -342,6 +346,9 @@ func Load(path string) (*Config, error) {
 	// Override with environment variables
 	if listen := os.Getenv("KULA_LISTEN"); listen != "" {
 		cfg.Web.Listen = listen
+	}
+	if sock := os.Getenv("KULA_UNIX_SOCKET"); sock != "" {
+		cfg.Web.UnixSocket = sock
 	}
 	if portStr := os.Getenv("KULA_PORT"); portStr != "" {
 		if port64, err := strconv.ParseInt(portStr, 10, 32); err == nil {

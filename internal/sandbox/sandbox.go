@@ -31,8 +31,11 @@ import (
 //   - /proc and /sys (read-only, for metrics collection)
 //   - configPath (read-only)
 //   - storageDir (read-write)
+//   - parent dir of web.UnixSocket (read-write, if configured)
 //
-// It restricts network access to only binding on the given TCP port.
+// It restricts network access to only binding on the given TCP port. When the
+// web server is configured to listen on a Unix socket, no TCP bind rule is
+// added.
 //
 // When application monitoring is enabled, additional rules are added:
 //   - Nginx: ConnectTCP to the status URL port (for HTTP GET)
@@ -44,7 +47,11 @@ import (
 // but before starting goroutines that serve requests.
 //
 // On kernels without Landlock support, this logs a warning and returns nil.
-func Enforce(configPath string, storageDir string, webPort int, appCfg config.ApplicationsConfig, ollamaCfg config.OllamaConfig) error {
+func Enforce(configPath string, storageDir string, webCfg config.WebConfig, appCfg config.ApplicationsConfig, ollamaCfg config.OllamaConfig) error {
+	webPort := 0
+	if webCfg.Enabled && webCfg.UnixSocket == "" {
+		webPort = webCfg.Port
+	}
 	// Resolve paths to absolute to satisfy Landlock requirements
 	absConfigPath, err := filepath.Abs(configPath)
 	if err != nil {
@@ -77,6 +84,19 @@ func Enforce(configPath string, storageDir string, webPort int, appCfg config.Ap
 
 		// Data storage: read-write access
 		landlock.RWDirs(absStorageDir),
+	}
+
+	// Web Unix socket: allow RW on the parent directory so we can create,
+	// chmod and unlink the socket file.
+	var webSocketInfo string
+	if webCfg.Enabled && webCfg.UnixSocket != "" {
+		absSock, err := filepath.Abs(webCfg.UnixSocket)
+		if err != nil {
+			return fmt.Errorf("sandbox: resolving web unix_socket: %w", err)
+		}
+		sockDir := filepath.Dir(absSock)
+		fsRules = append(fsRules, landlock.RWDirs(sockDir))
+		webSocketInfo = absSock
 	}
 
 	// Build network rules: only allow binding to the web port
@@ -209,11 +229,14 @@ func Enforce(configPath string, storageDir string, webPort int, appCfg config.Ap
 
 	var netStatus string
 	// Network restrictions (BindTCP/ConnectTCP) require ABI v4+ (kernel 6.7+)
-	if webPort == 0 {
+	switch {
+	case webSocketInfo != "":
+		netStatus = fmt.Sprintf(", web: unix:%s", webSocketInfo)
+	case webPort == 0:
 		netStatus = ", net: disabled"
-	} else if abi < 4 {
+	case abi < 4:
 		netStatus = " (network protection NOT supported by kernel, ABI < 4)"
-	} else {
+	default:
 		netStatus = fmt.Sprintf(", net: bind TCP/%d", webPort)
 	}
 

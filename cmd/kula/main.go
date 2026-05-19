@@ -125,11 +125,7 @@ func runServe(cfg *config.Config, configPath string, osName, kernelVersion, cpuA
 
 	// Enforce Landlock sandbox: restrict filesystem and network access
 	// to only what Kula needs. Non-fatal on unsupported kernels.
-	port := 0
-	if cfg.Web.Enabled {
-		port = cfg.Web.Port
-	}
-	if err := sandbox.Enforce(configPath, cfg.Storage.Directory, port, cfg.Applications, cfg.Ollama); err != nil {
+	if err := sandbox.Enforce(configPath, cfg.Storage.Directory, cfg.Web, cfg.Applications, cfg.Ollama); err != nil {
 		log.Printf("Warning: Landlock sandbox not enforced: %v", err)
 	}
 
