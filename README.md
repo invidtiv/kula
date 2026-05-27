@@ -159,9 +159,9 @@ rm -f ${KULA_INSTALL}
 ### Standalone
 
 ```bash
-wget https://github.com/c0m4r/kula/releases/download/0.16.0/kula-0.16.0-amd64.tar.gz
-echo "0e13e8ac6feba89268e223c4975a3d31e1b9db91d6fe9550a0bb158fc25616fd kula-0.16.0-amd64.tar.gz" | sha256sum -c || rm -f kula-0.16.0-amd64.tar.gz
-tar -xvf kula-0.16.0-amd64.tar.gz
+wget https://github.com/c0m4r/kula/releases/download/0.16.1/kula-0.16.1-amd64.tar.gz
+echo "a46fe71f322b81a1a34572a311f91442656dfa8b2fbb6221016967b6c9a2afc2 kula-0.16.1-amd64.tar.gz" | sha256sum -c || rm -f kula-0.16.1-amd64.tar.gz
+tar -xvf kula-0.16.1-amd64.tar.gz
 cd kula
 ./kula
 ```
@@ -184,18 +184,18 @@ docker logs -f kula
 ### Debian / Ubuntu (.deb)
 
 ```bash
-wget https://github.com/c0m4r/kula/releases/download/0.16.0/kula-0.16.0-amd64.deb
-echo "b4edd589ed99e6053f9a74ed0e4e9511880e39e9582078d09aff94003a684dcb kula-0.16.0-amd64.deb" | sha256sum -c || rm -f kula-0.16.0-amd64.deb
-sudo dpkg -i kula-0.16.0-amd64.deb
+wget https://github.com/c0m4r/kula/releases/download/0.16.1/kula-0.16.1-amd64.deb
+echo "a1f0bb807f5f6c37471b39987e26428f6aeabc51d377ca5af091453e4a98cbd8 kula-0.16.1-amd64.deb" | sha256sum -c || rm -f kula-0.16.1-amd64.deb
+sudo dpkg -i kula-0.16.1-amd64.deb
 journalctl -f -t kula
 ```
 
 ### RHEL / Fedora / CentOS / Rocky / Alma (.rpm)
 
 ```bash
-wget https://github.com/c0m4r/kula/releases/download/0.16.0/kula-0.16.0-x86_64.rpm
-echo "2aba936feaf67c96c95070f22beae8c40a590adb2876d3f2b70e5a3595bd5fb6 kula-0.16.0-x86_64.rpm" | sha256sum -c || rm -f kula-0.16.0-x86_64.rpm
-sudo rpm -i kula-0.16.0-x86_64.rpm
+wget https://github.com/c0m4r/kula/releases/download/0.16.1/kula-0.16.1-x86_64.rpm
+echo "f911d2f2b3a213dd220ab15286ae6e73a9a5614562155c0cd6cbbedf291bfc8a kula-0.16.1-x86_64.rpm" | sha256sum -c || rm -f kula-0.16.1-x86_64.rpm
+sudo rpm -i kula-0.16.1-x86_64.rpm
 journalctl -f -t kula
 ```
 
