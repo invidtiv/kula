@@ -327,7 +327,7 @@ func (cc *containerCollector) collectViaCgroups(elapsed float64) []ContainerStat
 			}
 			seen[id] = true
 
-			shortID := id
+			shortID := id[:minInt(12, len(id))]
 			cc.debugf("[containers] found cgroup: %s (id: %s)", base, id)
 
 			if !cc.matchFilter(id, shortID) {
