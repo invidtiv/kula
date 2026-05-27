@@ -8,6 +8,7 @@
 # - KULA_PORT overrides web.port
 # - KULA_UNIX_SOCKET overrides web.unix_socket
 # - KULA_MOUNTS_DETECTION overrides collection.mounts_detection
+# - KULA_BASE_PATH overrides web.base_path
 
 # Global settings
 global:
@@ -66,6 +67,14 @@ web:
 
   listen: "" # use [] brackets for IPv6 addresses, e.g. "[::1]"
   port: 27960
+
+  # Mount Kula under a URL sub-path. Empty (default) serves at the root,
+  # preserving existing behavior. When set (e.g. "/kula"), every HTTP
+  # route — UI, API, WebSocket, /metrics, /health — is served under that
+  # prefix. Use this when hosting Kula behind a reverse proxy that forwards
+  # requests with the prefix intact (does NOT strip it).
+  # Can also be set via the KULA_BASE_PATH env var.
+  base_path: ""
 
   # Listen on a Unix domain socket instead of a TCP port. When set, the TCP
   # listener is NOT opened — useful behind a local reverse proxy (nginx).

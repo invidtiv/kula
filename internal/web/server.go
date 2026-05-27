@@ -269,6 +269,33 @@ func (s *Server) corsMiddleware(next http.Handler) http.Handler {
 	})
 }
 
+// cookiePath returns the Path attribute for session cookies. When a base
+// path is configured the cookie is scoped to it; otherwise it falls back to
+// "/" so behavior is identical to pre-base-path versions.
+func cookiePath(basePath string) string {
+	if basePath == "" {
+		return "/"
+	}
+	return basePath + "/"
+}
+
+// mountWithBasePath wraps inner so that all requests must arrive under the
+// given basePath. The prefix is stripped before inner sees the request, so
+// the inner handlers keep seeing root-relative paths. A bare prefix (no
+// trailing slash) is redirected to basePath+"/". When basePath is empty,
+// inner is returned unchanged.
+func mountWithBasePath(inner http.Handler, basePath string) http.Handler {
+	if basePath == "" {
+		return inner
+	}
+	outer := http.NewServeMux()
+	outer.HandleFunc(basePath, func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, basePath+"/", http.StatusMovedPermanently)
+	})
+	outer.Handle(basePath+"/", http.StripPrefix(basePath, inner))
+	return outer
+}
+
 // sessionCookieSameSite returns the SameSite mode and Secure flag to use
 // for session-related cookies. When AllowedOrigins is non-empty, browsers
 // will only attach cookies on cross-origin requests if SameSite=None and
@@ -363,10 +390,11 @@ func (s *Server) Start() error {
 
 	if s.cfg.PrometheusMetrics.Enabled {
 		mux.Handle("/metrics", loggingMiddleware(s.cfg, http.HandlerFunc(s.handleMetrics)))
+		metricsPath := s.cfg.BasePath + "/metrics"
 		if s.cfg.PrometheusMetrics.Token != "" {
-			log.Printf("Prometheus metrics enabled at /metrics with bearer token authentication")
+			log.Printf("Prometheus metrics enabled at %s with bearer token authentication", metricsPath)
 		} else {
-			log.Printf("Prometheus metrics enabled at /metrics without authentication")
+			log.Printf("Prometheus metrics enabled at %s without authentication", metricsPath)
 		}
 	}
 
@@ -389,7 +417,12 @@ func (s *Server) Start() error {
 		}
 	}()
 
-	var handler = s.securityMiddleware(mux)
+	routed := mountWithBasePath(mux, s.cfg.BasePath)
+	if s.cfg.BasePath != "" {
+		log.Printf("Web routes mounted under base path %q", s.cfg.BasePath)
+	}
+
+	var handler = s.securityMiddleware(routed)
 	if s.cfg.EnableCompression {
 		handler = gzipMiddleware(handler)
 	}
@@ -409,9 +442,9 @@ func (s *Server) Start() error {
 	errCh := make(chan error, len(listeners))
 	for _, ln := range listeners {
 		if ln.Addr().Network() == "unix" {
-			log.Printf("Web UI listening on unix:%s", ln.Addr())
+			log.Printf("Web UI listening on unix:%s%s", ln.Addr(), s.cfg.BasePath)
 		} else {
-			log.Printf("Web UI listening on http://%s", ln.Addr())
+			log.Printf("Web UI listening on http://%s%s", ln.Addr(), s.cfg.BasePath)
 		}
 		go func(ln net.Listener) {
 			errCh <- s.httpSrv.Serve(ln)
@@ -759,7 +792,7 @@ func (s *Server) handleLogin(w http.ResponseWriter, r *http.Request) {
 	http.SetCookie(w, &http.Cookie{
 		Name:     "kula_session",
 		Value:    token,
-		Path:     "/",
+		Path:     cookiePath(s.cfg.BasePath),
 		HttpOnly: true,
 		Secure:   secure,
 		MaxAge:   int(s.cfg.Auth.SessionTimeout.Seconds()),
@@ -793,7 +826,7 @@ func (s *Server) handleLogout(w http.ResponseWriter, r *http.Request) {
 	http.SetCookie(w, &http.Cookie{
 		Name:     "kula_session",
 		Value:    "",
-		Path:     "/",
+		Path:     cookiePath(s.cfg.BasePath),
 		HttpOnly: true,
 		Secure:   secure,
 		MaxAge:   -1,
@@ -1060,12 +1093,14 @@ func (s *Server) renderTemplate(w http.ResponseWriter, r *http.Request, template
 		AuthEnabled bool
 		LangForce   bool
 		EasterEgg   bool
+		BasePath    string
 	}{
 		Nonce:       nonce,
 		SRI:         s.sriHashes,
 		AuthEnabled: s.cfg.Auth.Enabled,
 		LangForce:   s.cfg.Lang.Force,
 		EasterEgg:   s.global.EasterEgg,
+		BasePath:    s.cfg.BasePath,
 	}
 
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")

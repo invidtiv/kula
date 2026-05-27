@@ -11,6 +11,7 @@ import { updateGauges } from './gauges.js';
 import { evaluateAlerts } from './alerts.js';
 import { applyStoredFocusMode } from './focus-mode.js';
 import { addSampleToSplitCharts, updateSplitSelectors } from './split.js';
+import { apiUrl } from './api.js';
 
 // CSS order values for dynamic app chart grouping within the grid.
 const APP_ORDER_NGINX = 10;
@@ -1187,7 +1188,7 @@ export function fetchZoomedHistory(fromDate, toDate) {
     const from = fromDate.toISOString();
     const to = toDate.toISOString();
     const points = Math.max(600, window.innerWidth || 1000);
-    fetch(`/api/history?from=${from}&to=${to}&points=${points}`)
+    fetch(apiUrl(`/api/history?from=${from}&to=${to}&points=${points}`))
         .then(r => r.json())
         .then(response => {
             const data = response.samples || response;
@@ -1616,7 +1617,7 @@ export function fetchHistory(rangeSeconds) {
     const to = new Date().toISOString();
     const from = new Date(Date.now() - rangeSeconds * 1000).toISOString();
     const points = Math.max(600, window.innerWidth || 1000);
-    fetch(`/api/history?from=${from}&to=${to}&points=${points}`)
+    fetch(apiUrl(`/api/history?from=${from}&to=${to}&points=${points}`))
         .then(r => r.json())
         .then(response => {
             const data = response.samples || response;
@@ -1696,7 +1697,7 @@ export function fetchCustomHistory(fromDate, toDate) {
     const from = fromDate.toISOString();
     const to = toDate.toISOString();
     const points = Math.max(600, window.innerWidth || 1000);
-    fetch(`/api/history?from=${from}&to=${to}&points=${points}`)
+    fetch(apiUrl(`/api/history?from=${from}&to=${to}&points=${points}`))
         .then(r => r.json())
         .then(response => {
             const data = response.samples || response;
@@ -1761,7 +1762,7 @@ export function fetchGapHistory(fromDate, toDate) {
 
     const from = fromDate.toISOString();
     const to = toDate.toISOString();
-    fetch(`/api/history?from=${from}&to=${to}&points=300`)
+    fetch(apiUrl(`/api/history?from=${from}&to=${to}&points=300`))
         .then(r => r.json())
         .then(response => {
             const data = response.samples || response;

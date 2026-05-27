@@ -178,6 +178,138 @@ func TestCreateUnixListenerRefusesLive(t *testing.T) {
 	}
 }
 
+func TestMountWithBasePath(t *testing.T) {
+	hit := func(path string) http.HandlerFunc {
+		return func(w http.ResponseWriter, r *http.Request) {
+			if r.URL.Path != path {
+				t.Errorf("inner saw URL.Path = %q, want %q", r.URL.Path, path)
+			}
+			w.WriteHeader(http.StatusOK)
+			_, _ = w.Write([]byte("ok:" + path))
+		}
+	}
+
+	inner := http.NewServeMux()
+	inner.HandleFunc("/api/current", hit("/api/current"))
+	inner.HandleFunc("/health", hit("/health"))
+	inner.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(http.StatusOK)
+		_, _ = w.Write([]byte("root:" + r.URL.Path))
+	})
+
+	t.Run("empty base path is pass-through", func(t *testing.T) {
+		h := mountWithBasePath(inner, "")
+		rec := httptest.NewRecorder()
+		h.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/api/current", nil))
+		if rec.Code != http.StatusOK || rec.Body.String() != "ok:/api/current" {
+			t.Fatalf("got code=%d body=%q", rec.Code, rec.Body.String())
+		}
+	})
+
+	t.Run("with base path: routed via prefix", func(t *testing.T) {
+		h := mountWithBasePath(inner, "/kula")
+		for _, tc := range []struct {
+			path, want string
+		}{
+			{"/kula/api/current", "ok:/api/current"},
+			{"/kula/health", "ok:/health"},
+			{"/kula/", "root:/"},
+		} {
+			rec := httptest.NewRecorder()
+			h.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, tc.path, nil))
+			if rec.Code != http.StatusOK {
+				t.Errorf("%s: code=%d body=%q", tc.path, rec.Code, rec.Body.String())
+				continue
+			}
+			if rec.Body.String() != tc.want {
+				t.Errorf("%s: body=%q want %q", tc.path, rec.Body.String(), tc.want)
+			}
+		}
+	})
+
+	t.Run("with base path: root paths return 404", func(t *testing.T) {
+		h := mountWithBasePath(inner, "/kula")
+		rec := httptest.NewRecorder()
+		h.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/api/current", nil))
+		if rec.Code != http.StatusNotFound {
+			t.Errorf("expected 404 for unprefixed request, got %d", rec.Code)
+		}
+	})
+
+	t.Run("with base path: bare prefix redirects to prefix/", func(t *testing.T) {
+		h := mountWithBasePath(inner, "/kula")
+		rec := httptest.NewRecorder()
+		h.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/kula", nil))
+		if rec.Code != http.StatusMovedPermanently {
+			t.Fatalf("expected 301 redirect, got %d", rec.Code)
+		}
+		if loc := rec.Header().Get("Location"); loc != "/kula/" {
+			t.Errorf("Location = %q, want %q", loc, "/kula/")
+		}
+	})
+
+	t.Run("with nested base path", func(t *testing.T) {
+		h := mountWithBasePath(inner, "/monitoring/kula")
+		rec := httptest.NewRecorder()
+		h.ServeHTTP(rec, httptest.NewRequest(http.MethodGet, "/monitoring/kula/api/current", nil))
+		if rec.Code != http.StatusOK || rec.Body.String() != "ok:/api/current" {
+			t.Fatalf("got code=%d body=%q", rec.Code, rec.Body.String())
+		}
+	})
+}
+
+func TestCookiePath(t *testing.T) {
+	if got := cookiePath(""); got != "/" {
+		t.Errorf("cookiePath(\"\") = %q, want /", got)
+	}
+	if got := cookiePath("/kula"); got != "/kula/" {
+		t.Errorf("cookiePath(\"/kula\") = %q, want /kula/", got)
+	}
+}
+
+func TestTemplateBasePathInjection(t *testing.T) {
+	s := NewServer(
+		config.WebConfig{
+			BasePath: "/kula",
+			Security: config.SecurityConfig{Headers: true, OriginValidation: true},
+		},
+		config.GlobalConfig{}, nil, nil, t.TempDir(), config.OllamaConfig{},
+	)
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	handler := s.securityMiddleware(http.HandlerFunc(s.handleIndex))
+	handler.ServeHTTP(rec, req)
+	if rec.Code != http.StatusOK {
+		t.Fatalf("got code=%d body=%q", rec.Code, rec.Body.String())
+	}
+	body := rec.Body.String()
+	if !strings.Contains(body, `<base href="/kula/">`) {
+		t.Errorf("HTML missing <base href=\"/kula/\">; body excerpt:\n%s", body[:min(len(body), 600)])
+	}
+	if !strings.Contains(body, `window.KULA_BASE_PATH = "\/kula"`) &&
+		!strings.Contains(body, `window.KULA_BASE_PATH = "/kula"`) {
+		t.Errorf("HTML missing window.KULA_BASE_PATH literal; body excerpt:\n%s", body[:min(len(body), 800)])
+	}
+}
+
+func TestTemplateBasePathEmpty(t *testing.T) {
+	s := NewServer(
+		config.WebConfig{Security: config.SecurityConfig{Headers: true, OriginValidation: true}},
+		config.GlobalConfig{}, nil, nil, t.TempDir(), config.OllamaConfig{},
+	)
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/", nil)
+	handler := s.securityMiddleware(http.HandlerFunc(s.handleIndex))
+	handler.ServeHTTP(rec, req)
+	body := rec.Body.String()
+	if strings.Contains(body, "<base href=") {
+		t.Errorf("HTML must not contain <base href> when base path is empty")
+	}
+	if !strings.Contains(body, `window.KULA_BASE_PATH = ""`) {
+		t.Errorf("expected empty KULA_BASE_PATH string literal; body excerpt:\n%s", body[:min(len(body), 800)])
+	}
+}
+
 func TestHandleHealth(t *testing.T) {
 	s := NewServer(config.WebConfig{Security: config.SecurityConfig{Headers: true, OriginValidation: true}}, config.GlobalConfig{}, nil, nil, t.TempDir(), config.OllamaConfig{})
 

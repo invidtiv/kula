@@ -5,13 +5,11 @@
 'use strict';
 import { state } from './state.js';
 import { pushLiveSample, fetchHistory, fetchGapHistory } from './charts-data.js';
+import { wsUrl } from './api.js';
 
 export function connectWS() {
-    const proto = location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const wsUrl = `${proto}//${location.host}/ws`;
-
     try {
-        state.ws = new WebSocket(wsUrl);
+        state.ws = new WebSocket(wsUrl('/ws'));
     } catch (e) {
         scheduleReconnect();
         return;

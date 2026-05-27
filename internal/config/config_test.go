@@ -277,3 +277,67 @@ func TestValidateTiers(t *testing.T) {
 		})
 	}
 }
+
+func TestNormalizeBasePath(t *testing.T) {
+	tests := []struct {
+		in      string
+		want    string
+		wantErr bool
+	}{
+		{"", "", false},
+		{"/", "", false},
+		{"  ", "", false},
+		{"kula", "/kula", false},
+		{"/kula", "/kula", false},
+		{"/kula/", "/kula", false},
+		{"///kula///", "/kula", false},
+		{"/monitoring/kula", "/monitoring/kula", false},
+		{"monitoring/kula/", "/monitoring/kula", false},
+		{"/kula//foo", "/kula/foo", false},
+		{"  /kula  ", "/kula", false},
+		{"/kula?x=1", "", true},
+		{"/kula#frag", "", true},
+		{"/kula\\bad", "", true},
+		{"/has space", "", true},
+		{"/has\ttab", "", true},
+		{"/has\nnewline", "", true},
+		{"/./kula", "", true},
+		{"/../kula", "", true},
+		{"/kula/..", "", true},
+	}
+	for _, tt := range tests {
+		t.Run(tt.in, func(t *testing.T) {
+			got, err := normalizeBasePath(tt.in)
+			if tt.wantErr {
+				if err == nil {
+					t.Fatalf("normalizeBasePath(%q) = %q, want error", tt.in, got)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("normalizeBasePath(%q) unexpected error: %v", tt.in, err)
+			}
+			if got != tt.want {
+				t.Errorf("normalizeBasePath(%q) = %q, want %q", tt.in, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestLoadBasePathEnvOverride(t *testing.T) {
+	t.Setenv("KULA_BASE_PATH", "/kula/")
+	cfg, err := Load("/nonexistent/path/config.yaml")
+	if err != nil {
+		t.Fatalf("Load() error: %v", err)
+	}
+	if cfg.Web.BasePath != "/kula" {
+		t.Errorf("Web.BasePath = %q, want /kula", cfg.Web.BasePath)
+	}
+}
+
+func TestLoadBasePathEnvInvalid(t *testing.T) {
+	t.Setenv("KULA_BASE_PATH", "/bad#frag")
+	if _, err := Load("/nonexistent/path/config.yaml"); err == nil {
+		t.Fatal("Load() expected error for invalid base path, got nil")
+	}
+}

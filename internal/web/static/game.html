@@ -4,6 +4,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    {{if .BasePath}}<base href="{{.BasePath}}/">{{end}}
     <title>Space Invaders</title>
     <link rel="icon" href="kula.svg">
     <meta name="description" content="Retro Space Invaders arcade game - an easter egg in the Kulaerver monitor.">
@@ -15,7 +16,7 @@
     <div class="scanlines"></div>
 
     <!-- Back to dashboard -->
-    <a href="/" class="back-link" id="back-link">← <span class="back-text">Dashboard</span></a>
+    <a href="./" class="back-link" id="back-link">← <span class="back-text">Dashboard</span></a>
 
     <!-- HUD -->
     <div class="hud" id="hud">

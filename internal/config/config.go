@@ -7,7 +7,9 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"time"
+	"unicode"
 
 	"gopkg.in/yaml.v3"
 )
@@ -77,6 +79,11 @@ type WebConfig struct {
 	MaxWebsocketConns  int         `yaml:"max_websocket_conns"`
 	MaxWebsocketConnsPerIP int         `yaml:"max_websocket_conns_per_ip"`
 	Security           SecurityConfig `yaml:"security"`
+	// BasePath mounts every HTTP route (UI, API, WebSocket, /metrics, /health)
+	// under this URL sub-path, e.g. "/kula". Empty (default) serves at the
+	// root unchanged. Normalized at load time: leading slash enforced, trailing
+	// slash stripped, "/" collapses to "".
+	BasePath string `yaml:"base_path"`
 }
 
 // SecurityConfig groups HTTP security features that can be relaxed for
@@ -413,6 +420,15 @@ func Load(path string) (*Config, error) {
 	if pass := os.Getenv("KULA_MYSQL_PASSWORD"); pass != "" {
 		cfg.Applications.Mysql.Password = pass
 	}
+	if bp, set := os.LookupEnv("KULA_BASE_PATH"); set {
+		cfg.Web.BasePath = bp
+	}
+
+	normalized, err := normalizeBasePath(cfg.Web.BasePath)
+	if err != nil {
+		return nil, err
+	}
+	cfg.Web.BasePath = normalized
 
 	// Expand ~/ shorthand to the user's home directory
 	if len(cfg.Storage.Directory) > 1 && cfg.Storage.Directory[:2] == "~/" {
@@ -457,6 +473,44 @@ func validateOllamaURL(rawURL string) error {
 		return fmt.Errorf("ollama.url: host %q is not a loopback address; only localhost, 127.0.0.1, or ::1 are allowed", host)
 	}
 	return nil
+}
+
+// normalizeBasePath validates and canonicalizes web.base_path.
+//
+// Returns "" for empty input or "/". Otherwise returns a path with a single
+// leading "/" and no trailing "/". Rejects paths containing whitespace,
+// control characters, "?", "#", "\\", or "." / ".." segments.
+func normalizeBasePath(p string) (string, error) {
+	p = strings.TrimSpace(p)
+	if p == "" || p == "/" {
+		return "", nil
+	}
+	for _, r := range p {
+		if unicode.IsControl(r) || unicode.IsSpace(r) {
+			return "", fmt.Errorf("web.base_path: contains whitespace or control character")
+		}
+		switch r {
+		case '?', '#', '\\':
+			return "", fmt.Errorf("web.base_path: contains illegal character %q", r)
+		}
+	}
+	// Collapse repeated slashes and trim.
+	for strings.Contains(p, "//") {
+		p = strings.ReplaceAll(p, "//", "/")
+	}
+	p = strings.TrimRight(p, "/")
+	if !strings.HasPrefix(p, "/") {
+		p = "/" + p
+	}
+	if p == "/" {
+		return "", nil
+	}
+	for _, seg := range strings.Split(strings.TrimPrefix(p, "/"), "/") {
+		if seg == "" || seg == "." || seg == ".." {
+			return "", fmt.Errorf("web.base_path: invalid segment %q", seg)
+		}
+	}
+	return p, nil
 }
 
 // validateTiers checks that collection.interval and storage.tiers form a
