@@ -11,7 +11,7 @@ Types of changes: Added, Changed, Deprecated, Removed, Fixed, Security
 
 ### Added
 
-- Configurable base path support (#25)
+- Configurable base path support (#25) co-authored by @apre
 
 ### Changed
 
