@@ -6,6 +6,7 @@ import (
 	"net/http/httptest"
 	"os"
 	"path/filepath"
+	"strconv"
 	"testing"
 	"time"
 )
@@ -492,4 +493,47 @@ func TestCSRFMiddleware(t *testing.T) {
 			t.Errorf("GET should be allowed: status = %d, want 200", rec.Code)
 		}
 	})
+}
+
+func TestRateLimiterCapsDistinctKeys(t *testing.T) {
+	rl := &RateLimiter{attempts: make(map[string][]time.Time)}
+
+	// Fill the limiter to capacity with distinct, fresh keys.
+	for i := 0; i < maxRateLimiterKeys; i++ {
+		if !rl.Allow("ip-" + strconv.Itoa(i)) {
+			t.Fatalf("key %d should be allowed while under the cap", i)
+		}
+	}
+
+	// A brand-new key must be refused now that the map is saturated with fresh
+	// (non-purgeable) entries: fail closed rather than grow without bound.
+	if rl.Allow("overflow-ip") {
+		t.Fatal("new key should be denied when the limiter is saturated with fresh entries")
+	}
+	if len(rl.attempts) > maxRateLimiterKeys {
+		t.Fatalf("map grew past cap: got %d keys, want <= %d", len(rl.attempts), maxRateLimiterKeys)
+	}
+
+	// An already-tracked key is still served — the cap never evicts existing keys.
+	if !rl.Allow("ip-0") {
+		t.Fatal("already-tracked key should still be allowed under the cap")
+	}
+}
+
+func TestRateLimiterReclaimsStaleKeys(t *testing.T) {
+	rl := &RateLimiter{attempts: make(map[string][]time.Time)}
+
+	// Saturate the map with entries that are already outside the 5-minute window.
+	stale := time.Now().Add(-10 * time.Minute)
+	for i := 0; i < maxRateLimiterKeys; i++ {
+		rl.attempts["ip-"+strconv.Itoa(i)] = []time.Time{stale}
+	}
+
+	// A new key trips the cap, which purges the stale entries and admits the key.
+	if !rl.Allow("fresh-ip") {
+		t.Fatal("new key should be admitted after stale entries are purged")
+	}
+	if len(rl.attempts) > maxRateLimiterKeys {
+		t.Fatalf("map grew past cap after purge: got %d keys", len(rl.attempts))
+	}
 }

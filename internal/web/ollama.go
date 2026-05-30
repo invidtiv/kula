@@ -65,6 +65,11 @@ func (rl *chatRateLimiter) Allow(ip string) bool {
 	defer rl.mu.Unlock()
 	now := time.Now()
 	cutoff := now.Add(-time.Minute)
+
+	if !reserveRateLimiterKey(rl.requests, ip, func() { rl.purge(cutoff) }) {
+		return false
+	}
+
 	var recent []time.Time
 	for _, t := range rl.requests[ip] {
 		if t.After(cutoff) {
@@ -76,6 +81,32 @@ func (rl *chatRateLimiter) Allow(ip string) bool {
 	}
 	rl.requests[ip] = append(recent, now)
 	return true
+}
+
+// purge removes entries with no requests after cutoff. Caller must hold rl.mu.
+func (rl *chatRateLimiter) purge(cutoff time.Time) {
+	for key, reqs := range rl.requests {
+		var recent []time.Time
+		for _, t := range reqs {
+			if t.After(cutoff) {
+				recent = append(recent, t)
+			}
+		}
+		if len(recent) == 0 {
+			delete(rl.requests, key)
+		} else {
+			rl.requests[key] = recent
+		}
+	}
+}
+
+// purgeStale drops entries older than the one-minute rate-limit window. It takes
+// the lock itself, so the periodic cleanup goroutine can reclaim idle keys without
+// waiting for the next Allow call to trip the size cap.
+func (rl *chatRateLimiter) purgeStale() {
+	rl.mu.Lock()
+	defer rl.mu.Unlock()
+	rl.purge(time.Now().Add(-time.Minute))
 }
 
 // ollamaClient proxies requests to a local Ollama instance or any OpenAI-compatible backend.

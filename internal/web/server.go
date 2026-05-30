@@ -423,6 +423,12 @@ func (s *Server) Start() error {
 		defer ticker.Stop()
 		for range ticker.C {
 			s.auth.CleanupSessions()
+			if s.ollamaLimiter != nil {
+				s.ollamaLimiter.purgeStale()
+			}
+			if s.ollamaMetaLim != nil {
+				s.ollamaMetaLim.purgeStale()
+			}
 		}
 	}()
 

@@ -39,6 +39,31 @@ type RateLimiter struct {
 	attempts map[string][]time.Time
 }
 
+// maxRateLimiterKeys bounds how many distinct keys (client IPs or usernames) a
+// rate limiter tracks at once. It sits far above any legitimate concurrent client
+// count for a self-hosted monitor but caps memory if an attacker sprays requests
+// from many source addresses. On reaching the cap the limiter purges stale entries
+// and, if still saturated with fresh ones, refuses new keys (fail-closed).
+const maxRateLimiterKeys = 16384
+
+// reserveRateLimiterKey reports whether key may be tracked in m without growing it
+// past maxRateLimiterKeys. Already-tracked keys are always admitted. A new key is
+// admitted while there is headroom; once the map is full, purge is run to reclaim
+// stale entries and the key is admitted only if that frees space. The caller must
+// hold the limiter's lock, and purge must operate under that same held lock.
+func reserveRateLimiterKey(m map[string][]time.Time, key string, purge func()) bool {
+	if _, tracked := m[key]; tracked {
+		return true
+	}
+	if len(m) >= maxRateLimiterKeys {
+		purge()
+		if len(m) >= maxRateLimiterKeys {
+			return false
+		}
+	}
+	return true
+}
+
 type session struct {
 	username  string
 	csrfToken string
@@ -97,6 +122,10 @@ func (rl *RateLimiter) Allow(ip string) bool {
 
 	now := time.Now()
 	cutoff := now.Add(-5 * time.Minute)
+
+	if !reserveRateLimiterKey(rl.attempts, ip, func() { rl.purge(cutoff) }) {
+		return false
+	}
 
 	var recent []time.Time
 	for _, t := range rl.attempts[ip] {

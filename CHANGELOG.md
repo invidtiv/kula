@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 Types of changes: Added, Changed, Deprecated, Removed, Fixed, Security
 
+## [0.17.3] - TBA
+
+### Security
+
+- Cap rate-limiter memory to prevent unbounded growth from distinct-IP floods
+
 ## [0.17.2] - 2026-05-30
 
 ### Changed
