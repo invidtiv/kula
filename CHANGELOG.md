@@ -7,7 +7,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 Types of changes: Added, Changed, Deprecated, Removed, Fixed, Security
 
-## [0.17.3] - TBA
+## [0.17.3] - 2026-06-01
 
 ### Added
 
