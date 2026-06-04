@@ -9,6 +9,10 @@ Types of changes: Added, Changed, Deprecated, Removed, Fixed, Security
 
 ## [0.17.4] - TBA
 
+### Added
+
+- Missing access logs for served web UI content
+
 ### Fixed
 
 - tier wrap fixes (#24)

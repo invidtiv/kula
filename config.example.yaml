@@ -157,7 +157,9 @@ web:
       disk_temp: false  # one chart per disk device (thermals section)
       gpu: false        # one chart per GPU
 
-  # API Access and Performance Logging
+  # Access and Performance Logging
+  # Access lines are tagged [API] for JSON/WebSocket endpoints and [WEB]
+  # for served UI content (HTML, JS, CSS, fonts, icons).
   logging:
     enabled: true
     # "access" (request details)
