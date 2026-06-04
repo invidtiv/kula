@@ -2,6 +2,7 @@ package storage
 
 import (
 	"fmt"
+	"io"
 	"math"
 	"os"
 	"path/filepath"
@@ -488,6 +489,29 @@ func (s *Store) QueryLatest() (*AggregatedSample, error) {
 	// Cold path: only reached on an empty store where no sample has been
 	// written yet this process lifetime and warmLatestCache found nothing.
 	return nil, nil
+}
+
+// TierCount returns the number of configured storage tiers.
+func (s *Store) TierCount() int {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	return len(s.tiers)
+}
+
+// SnapshotTier writes a consistent copy of tier i to w. The store's tier slice
+// is immutable after construction, so only the per-tier read lock (taken inside
+// SnapshotTo) is needed to guard against an in-flight Write; the brief store
+// lock here just bounds-checks the index without blocking the collection loop
+// for the duration of the copy.
+func (s *Store) SnapshotTier(i int, w io.Writer) (int64, error) {
+	s.mu.RLock()
+	if i < 0 || i >= len(s.tiers) {
+		s.mu.RUnlock()
+		return 0, fmt.Errorf("tier index %d out of range (have %d tiers)", i, len(s.tiers))
+	}
+	t := s.tiers[i]
+	s.mu.RUnlock()
+	return t.SnapshotTo(w)
 }
 
 func (s *Store) Close() error {

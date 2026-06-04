@@ -11,6 +11,7 @@ Types of changes: Added, Changed, Deprecated, Removed, Fixed, Security
 
 ### Added
 
+- Scheduled backups of the storage tier files
 - Missing access logs for served web UI content
 
 ### Fixed

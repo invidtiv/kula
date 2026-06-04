@@ -576,6 +576,20 @@ func (t *Tier) Flush() error {
 	return t.writeHeader()
 }
 
+// SnapshotTo writes a byte-for-byte copy of the tier file to w. The copy is
+// taken under the tier read lock, so it never races a Write (which updates the
+// data region and header atomically under the write lock). The result is a
+// self-contained, consistent tier file that can be reopened with OpenTier.
+func (t *Tier) SnapshotTo(w io.Writer) (int64, error) {
+	t.mu.RLock()
+	defer t.mu.RUnlock()
+	info, err := t.file.Stat()
+	if err != nil {
+		return 0, fmt.Errorf("stat tier %s: %w", t.path, err)
+	}
+	return io.Copy(w, io.NewSectionReader(t.file, 0, info.Size()))
+}
+
 // readRecord decodes a payload using per-record format detection.
 //
 //   - recordKindBinary (0x02): kind-tagged binary written by current code
