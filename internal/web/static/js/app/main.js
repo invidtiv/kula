@@ -9,6 +9,7 @@ import { i18n } from './i18n.js';
 import { addSampleToCharts, updateAllCharts, clearAllChartData, syncZoom, resetZoomAll, redrawChartsFromBuffer } from './charts-data.js';
 import { toggleAlertDropdown, toggleInfoDropdown } from './alerts.js';
 import { syncPauseState, togglePause, toggleLayout, applyLayout, setTimeRange, toggleCustomTimePicker, applyCustomRange } from './controls.js';
+import { applyUrlState, updateUrl } from './url-state.js';
 import { checkAuth, handleLogin, handleLogout } from './auth.js';
 import { applyTheme, toggleTheme } from './theme.js';
 import { setupHoverPause, setupChartActions } from './ui-actions.js';
@@ -55,6 +56,10 @@ function filterCharts(query) {
 async function init() {
     // Initialize i18n before everything else
     await i18n.init();
+
+    // Restore time window / range / aggregation from the URL query string
+    // (after i18n so labels render correctly, before the first history fetch).
+    applyUrlState();
 
     // Apply stored layout
     applyLayout();
@@ -111,6 +116,7 @@ async function init() {
             btn.classList.add('active');
             state.currentAggregation = btn.dataset.agg;
             localStorage.setItem('kula_aggregation', state.currentAggregation);
+            updateUrl();
 
             // Redraw charts with new aggregation
             clearAllChartData();

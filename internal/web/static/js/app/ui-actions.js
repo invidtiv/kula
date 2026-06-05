@@ -5,7 +5,7 @@
 'use strict';
 import { state } from './state.js';
 import { initCharts } from './charts-init.js';
-import { fetchHistory } from './charts-data.js';
+import { fetchHistory, fetchCustomHistory } from './charts-data.js';
 import { syncPauseState } from './controls.js';
 
 // ---- Hover Pause ----
@@ -278,7 +278,11 @@ export function setupChartActions() {
                 dropdown.classList.add('hidden');
 
                 initCharts();
-                fetchHistory(state.timeRange);
+                if (state.timeRange !== null) {
+                    fetchHistory(state.timeRange);
+                } else if (state.customFrom && state.customTo) {
+                    fetchCustomHistory(state.customFrom, state.customTo);
+                }
             });
 
             const dismissDropdown = (e) => {

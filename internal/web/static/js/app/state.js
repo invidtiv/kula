@@ -42,6 +42,8 @@ export const state = {
     cpuTempSensorNames: [],
     diskTempSensorNames: [],
     currentAggregation: localStorage.getItem('kula_aggregation') || 'avg',
+    aggFromUrl: false, // true when aggregation was set from the URL (takes precedence over server config)
+    defaultAggregation: null, // server's web.default_aggregation, from /api/config; null until loaded
     netOptions: [],
     diskIoOptions: [],
     diskTempOptions: [],

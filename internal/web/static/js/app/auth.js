@@ -84,7 +84,8 @@ export function fetchConfig() {
                 state.theme = cfg.theme;
                 applyTheme();
             }
-            if (cfg.aggregation && !localStorage.getItem('kula_aggregation')) {
+            if (cfg.aggregation) state.defaultAggregation = cfg.aggregation;
+            if (cfg.aggregation && !localStorage.getItem('kula_aggregation') && !state.aggFromUrl) {
                 state.currentAggregation = cfg.aggregation;
                 // Update active button state in the UI
                 const aggBtns = document.querySelectorAll('#agg-presets-list .time-btn');

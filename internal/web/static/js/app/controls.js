@@ -7,6 +7,7 @@ import { state } from './state.js';
 import { i18n } from './i18n.js';
 import { initCharts } from './charts-init.js';
 import { resetZoomAll, fetchHistory, fetchCustomHistory } from './charts-data.js';
+import { updateUrl } from './url-state.js';
 
 // ---- Pause/Resume ----
 export function syncPauseState() {
@@ -67,6 +68,17 @@ export function setTimeRange(seconds) {
     state.timeRange = seconds;
     state.customFrom = null;
     state.customTo = null;
+    syncTimeRangeUI(seconds);
+    updateUrl();
+
+    resetZoomAll();
+    fetchHistory(seconds);
+}
+
+// syncTimeRangeUI updates the active preset button and the range display
+// label to reflect the given preset window, without fetching history.
+// Shared by setTimeRange and the URL-state restore on page load.
+export function syncTimeRangeUI(seconds) {
     document.querySelectorAll('.time-btn[data-range]').forEach(b => b.classList.remove('active'));
     document.querySelector(`.time-btn[data-range="${seconds}"]`)?.classList.add('active');
     document.getElementById('btn-custom-range')?.classList.remove('active');
@@ -77,9 +89,6 @@ export function setTimeRange(seconds) {
         86400: i18n.t('last_24_h'), 259200: i18n.t('last_3_d'), 604800: i18n.t('last_7_d'), 2592000: i18n.t('last_30_d')
     };
     document.getElementById('time-range-display').textContent = labels[seconds] || `${i18n.t('last')} ${seconds}s`;
-
-    resetZoomAll();
-    fetchHistory(seconds);
 }
 
 // ---- Custom Time Range ----
@@ -113,14 +122,28 @@ export function applyCustomRange() {
     state.customFrom = fromDate;
     state.customTo = toDate;
 
-    // Deselect preset buttons
-    document.querySelectorAll('.time-btn[data-range]').forEach(b => b.classList.remove('active'));
-
-    const fmt = d => d.toLocaleString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
-    document.getElementById('time-range-display').textContent = `${fmt(fromDate)} → ${fmt(toDate)}`;
+    syncCustomRangeUI(fromDate, toDate);
+    updateUrl();
 
     resetZoomAll();
     fetchCustomHistory(fromDate, toDate);
+}
+
+// syncCustomRangeUI deselects the preset buttons, marks the custom-range
+// button active, and updates the range display label for a custom window.
+// It also populates the custom date inputs so they match the active range.
+// Shared by applyCustomRange and the URL-state restore on page load.
+export function syncCustomRangeUI(fromDate, toDate) {
+    document.querySelectorAll('.time-btn[data-range]').forEach(b => b.classList.remove('active'));
+    document.getElementById('btn-custom-range')?.classList.add('active');
+
+    const fromInput = document.getElementById('custom-from');
+    const toInput = document.getElementById('custom-to');
+    if (fromInput) fromInput.value = toLocalISOString(fromDate);
+    if (toInput) toInput.value = toLocalISOString(toDate);
+
+    const fmt = d => d.toLocaleString(undefined, { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
+    document.getElementById('time-range-display').textContent = `${fmt(fromDate)} → ${fmt(toDate)}`;
 }
 
 export function toLocalISOString(date) {

@@ -9,6 +9,10 @@ Types of changes: Added, Changed, Deprecated, Removed, Fixed, Security
 
 ## [0.18.1] - TBA
 
+### Added
+
+- Time window/range/agg in URLs
+
 ### Fixed
 
 - revert the monotonic-timestamp clamp

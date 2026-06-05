@@ -4,7 +4,7 @@
    ============================================================ */
 'use strict';
 import { state } from './state.js';
-import { pushLiveSample, fetchHistory, fetchGapHistory } from './charts-data.js';
+import { pushLiveSample, fetchHistory, fetchCustomHistory, fetchGapHistory } from './charts-data.js';
 import { wsUrl } from './api.js';
 
 export function connectWS() {
@@ -19,10 +19,16 @@ export function connectWS() {
         state.connected = true;
         state.reconnectDelay = 1000;
         updateConnectionStatus(true);
-        // Load history for the current time window on first connect
+        // Load history for the current time window on first connect.
+        // The window may be a preset range or a custom range restored
+        // from the URL (see url-state.js).
         if (!state.historyLoaded) {
             state.historyLoaded = true;
-            fetchHistory(state.timeRange);
+            if (state.timeRange !== null) {
+                fetchHistory(state.timeRange);
+            } else if (state.customFrom && state.customTo) {
+                fetchCustomHistory(state.customFrom, state.customTo);
+            }
         } else if (state.lastHistoricalTs) {
             fetchGapHistory(state.lastHistoricalTs, new Date());
         }
