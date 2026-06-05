@@ -203,18 +203,6 @@ func (s *Store) WriteSample(sample *collector.Sample) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	// Guard against wall-clock regressions (NTP step-back, suspend/resume, VM
-	// migration, an RTC that was ahead at boot). The ring buffer and ReadRange
-	// assume non-decreasing timestamps; a record older than the previous one
-	// makes range scans skip the finest tier or mis-window records. Clamp to the
-	// last stored timestamp so on-disk order stays monotonic. During a backward
-	// step timestamps briefly flatten until the wall clock catches up — far
-	// preferable to losing query coverage. (This mutates the sample's timestamp,
-	// which is intentional: the stored and broadcast views stay consistent.)
-	if s.latestCache != nil && sample.Timestamp.Before(s.latestCache.Timestamp) {
-		sample.Timestamp = s.latestCache.Timestamp
-	}
-
 	// Use the actual tier-0 resolution as the default/fallback duration.
 	fallbackDur := s.configs[0].Resolution
 	dur := fallbackDur
