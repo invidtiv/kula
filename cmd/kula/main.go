@@ -67,7 +67,19 @@ func main() {
 	})
 	loadConfig := config.Load
 	if configExplicit {
-		loadConfig = config.LoadRequired
+		// When the user explicitly points -config at a path that doesn't exist,
+		// seed it from the packaged example rather than refusing to start. Fall
+		// back to built-in defaults if the file can't be written.
+		if _, statErr := os.Stat(*configPath); os.IsNotExist(statErr) {
+			if werr := os.WriteFile(*configPath, kula.ExampleConfig, 0o600); werr != nil {
+				log.Printf("Warning: config %q did not exist and could not be seeded from the packaged example: %v; using built-in defaults", *configPath, werr)
+			} else {
+				log.Printf("Warning: config %q did not exist; seeded it from the packaged example", *configPath)
+				loadConfig = config.LoadRequired
+			}
+		} else {
+			loadConfig = config.LoadRequired
+		}
 	}
 
 	if showVersion || showVersionShort {
