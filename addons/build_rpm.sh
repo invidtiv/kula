@@ -177,6 +177,11 @@ fi
 
 %post
 # Post-install script
+# Seed an active config from the packaged example on first install
+if [ ! -e /etc/kula/config.yaml ]; then
+    cp /etc/kula/config.example.yaml /etc/kula/config.yaml
+fi
+
 # Set ownership for directories the program will use
 chown -R kula:kula /etc/kula
 chown -R kula:kula /var/lib/kula

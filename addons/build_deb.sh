@@ -117,6 +117,11 @@ if [ "\$1" = "configure" ]; then
         useradd --system -g kula -d /var/lib/kula -s /bin/false -c "Kula System Monitoring Daemon" kula
     fi
 
+    # Seed an active config from the packaged example on first install
+    if [ ! -e /etc/kula/config.yaml ]; then
+        cp /etc/kula/config.example.yaml /etc/kula/config.yaml
+    fi
+
     # Set ownership for directories the program will use
     chown -R kula:kula /etc/kula
     chown -R kula:kula /var/lib/kula

@@ -241,6 +241,11 @@ post_install() {
         useradd --system -g kula -d /var/lib/kula -s /bin/false -c "Kula monitoring tool" kula
     fi
 
+    # Seed an active config from the packaged example on first install
+    if [ ! -e /etc/kula/config.yaml ]; then
+        cp /etc/kula/config.example.yaml /etc/kula/config.yaml
+    fi
+
     # Set ownership for directories the program will use
     chown -R kula:kula /etc/kula
     chown -R kula:kula /var/lib/kula
@@ -251,10 +256,8 @@ post_install() {
     fi
 
     echo "Kula installed successfully!"
-    echo "Default configuration is at /etc/kula/config.example.yaml"
-    echo "To get started:"
-    echo "  cp /etc/kula/config.example.yaml /etc/kula/config.yaml"
-    echo "  systemctl enable --now kula.service"
+    echo "An active config has been seeded at /etc/kula/config.yaml"
+    echo "To get started: systemctl enable --now kula.service"
 }
 
 post_upgrade() {
