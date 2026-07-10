@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 Types of changes: Added, Changed, Deprecated, Removed, Fixed, Security
 
+## [Unreleased] - TBA
+
+### Fixed
+
+- remove systemd ProtectHome setting that prevents /home diskspace monitoring (#33)
+
 ## [0.18.4] - 2026-06-16
 
 ### Added

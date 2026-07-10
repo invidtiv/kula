@@ -26,7 +26,6 @@ RuntimeDirectoryMode=0750
 # omitted to avoid breaking collection.
 NoNewPrivileges=true
 ProtectSystem=strict
-ProtectHome=true
 ReadWritePaths=/var/lib/kula
 ReadOnlyPaths=/etc/kula
 PrivateTmp=true
