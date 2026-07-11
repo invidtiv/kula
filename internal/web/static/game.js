@@ -746,6 +746,22 @@
         updateMobileControlsVisibility();
         SFX.explode();
         canvas.style.cursor = 'default';
+
+        // Score endpoints are public, browser-originated APIs. Do not attach
+        // Kula session cookies, follow redirects, or disclose the dashboard URL.
+        const scoreUrl = canvas.getAttribute('data-score-url');
+        if (scoreUrl) {
+            fetch(scoreUrl, {
+                method: 'POST',
+                credentials: 'omit',
+                redirect: 'error',
+                referrerPolicy: 'no-referrer',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ score: score })
+            }).catch(() => {});
+        }
     }
 
     function nextLevel() {

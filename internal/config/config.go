@@ -3,6 +3,7 @@ package config
 import (
 	"fmt"
 	"log"
+	"net"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -31,6 +32,7 @@ type GlobalConfig struct {
 	ShowVersion    bool   `yaml:"show_version"`
 	DefaultTheme   string `yaml:"default_theme"`
 	EasterEgg      bool   `yaml:"easter_egg"`
+	GameScoreURL   string `yaml:"game_score_url"`
 }
 
 type CollectionConfig struct {
@@ -512,7 +514,79 @@ func load(path string, mustExist bool) (*Config, error) {
 		}
 	}
 
+	if _, err := GameScoreURLOrigin(cfg.Global.GameScoreURL); err != nil {
+		return nil, fmt.Errorf("invalid global.game_score_url: %w", err)
+	}
+
 	return cfg, nil
+}
+
+// GameScoreURLOrigin validates a game score endpoint and returns its origin
+// for use in a Content-Security-Policy source list. Score submission happens
+// in the browser, so the endpoint must use HTTP(S) and cannot carry credentials.
+func GameScoreURLOrigin(rawURL string) (string, error) {
+	if rawURL == "" {
+		return "", nil
+	}
+	// ParseRequestURI intentionally leaves fragments in the request target.
+	// Browsers do not: they strip them before fetch. Reject raw fragments and
+	// backslashes to avoid server/browser URL parser differences.
+	if strings.Contains(rawURL, "#") {
+		return "", fmt.Errorf("must not include a fragment")
+	}
+	if strings.Contains(rawURL, "\\") {
+		return "", fmt.Errorf("must not include a backslash")
+	}
+
+	u, err := url.ParseRequestURI(rawURL)
+	if err != nil {
+		return "", fmt.Errorf("invalid URL: %w", err)
+	}
+	if !strings.EqualFold(u.Scheme, "http") && !strings.EqualFold(u.Scheme, "https") {
+		return "", fmt.Errorf("must use http or https")
+	}
+	if u.Host == "" || u.Hostname() == "" {
+		return "", fmt.Errorf("must include a host")
+	}
+	if u.User != nil {
+		return "", fmt.Errorf("must not include user credentials")
+	}
+	if u.Fragment != "" {
+		return "", fmt.Errorf("must not include a fragment")
+	}
+	if !validGameScoreHost(u.Hostname()) {
+		return "", fmt.Errorf("host %q is invalid", u.Hostname())
+	}
+	if port := u.Port(); port != "" {
+		p, err := strconv.Atoi(port)
+		if err != nil || p < 1 || p > 65535 {
+			return "", fmt.Errorf("port %q is invalid", port)
+		}
+	}
+
+	return strings.ToLower(u.Scheme) + "://" + u.Host, nil
+}
+
+func validGameScoreHost(host string) bool {
+	if net.ParseIP(host) != nil {
+		return true
+	}
+
+	host = strings.TrimSuffix(host, ".")
+	if host == "" || len(host) > 253 {
+		return false
+	}
+	for _, label := range strings.Split(host, ".") {
+		if len(label) == 0 || len(label) > 63 || label[0] == '-' || label[len(label)-1] == '-' {
+			return false
+		}
+		for _, r := range label {
+			if (r < 'a' || r > 'z') && (r < 'A' || r > 'Z') && (r < '0' || r > '9') && r != '-' {
+				return false
+			}
+		}
+	}
+	return true
 }
 
 // validateOllamaURL ensures the Ollama URL only targets loopback addresses

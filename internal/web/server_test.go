@@ -393,3 +393,67 @@ func TestHandleHealth(t *testing.T) {
 		})
 	}
 }
+
+func TestGameScoreURLTemplateAndCSP(t *testing.T) {
+	globalCfg := config.GlobalConfig{
+		EasterEgg:    true,
+		GameScoreURL: "https://my-score-server.com/api/v1/submit?game=kula",
+	}
+	s := NewServer(config.WebConfig{Security: config.SecurityConfig{Headers: true}}, globalCfg, nil, nil, t.TempDir(), config.OllamaConfig{})
+
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest("GET", "/game.html", nil)
+
+	handler := s.securityMiddleware(http.HandlerFunc(s.handleGame))
+	handler.ServeHTTP(rec, req)
+
+	if rec.Code != http.StatusOK {
+		t.Fatalf("Expected status 200, got %d", rec.Code)
+	}
+
+	csp := rec.Header().Get("Content-Security-Policy")
+	expectedCSPPart := "connect-src 'self' https://my-score-server.com;"
+	if !strings.Contains(csp, expectedCSPPart) {
+		t.Errorf("expected CSP to contain %q, got %q", expectedCSPPart, csp)
+	}
+
+	body := rec.Body.String()
+	expectedAttr := `data-score-url="https://my-score-server.com/api/v1/submit?game=kula"`
+	if !strings.Contains(body, expectedAttr) {
+		t.Errorf("expected HTML body to contain %q", expectedAttr)
+	}
+}
+
+func TestInvalidGameScoreURLIsNotRendered(t *testing.T) {
+	s := NewServer(config.WebConfig{Security: config.SecurityConfig{Headers: true}}, config.GlobalConfig{
+		EasterEgg:    true,
+		GameScoreURL: "https://scores.example.com;script-src/submit",
+	}, nil, nil, t.TempDir(), config.OllamaConfig{})
+
+	rec := httptest.NewRecorder()
+	req := httptest.NewRequest(http.MethodGet, "/game.html", nil)
+	s.securityMiddleware(http.HandlerFunc(s.handleGame)).ServeHTTP(rec, req)
+
+	if strings.Contains(rec.Header().Get("Content-Security-Policy"), "connect-src") {
+		t.Errorf("invalid score URL added a connect-src directive: %q", rec.Header().Get("Content-Security-Policy"))
+	}
+	if strings.Contains(rec.Body.String(), "scores.example.com") {
+		t.Error("invalid score URL was rendered into the game template")
+	}
+}
+
+func TestGameScoreSubmissionRequestPolicy(t *testing.T) {
+	gameJS, err := staticFS.ReadFile("static/game.js")
+	if err != nil {
+		t.Fatalf("ReadFile(game.js): %v", err)
+	}
+	for _, option := range []string{
+		"credentials: 'omit'",
+		"redirect: 'error'",
+		"referrerPolicy: 'no-referrer'",
+	} {
+		if !strings.Contains(string(gameJS), option) {
+			t.Errorf("game score request is missing %s", option)
+		}
+	}
+}

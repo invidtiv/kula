@@ -3,6 +3,8 @@ package config
 import (
 	"os"
 	"path/filepath"
+	"strconv"
+	"strings"
 	"testing"
 	"time"
 )
@@ -471,5 +473,60 @@ func TestValidateBackup(t *testing.T) {
 	cfg.Backup.Retention = "5x"
 	if err := cfg.validateBackup(); err == nil {
 		t.Error("bad retention should fail validation")
+	}
+}
+
+func TestGameScoreURL(t *testing.T) {
+	dir := t.TempDir()
+	tests := []struct {
+		name   string
+		value  string
+		valid  bool
+		origin string
+	}{
+		{name: "empty", valid: true},
+		{name: "https endpoint", value: "https://example.com/score", valid: true, origin: "https://example.com"},
+		{name: "http endpoint", value: "http://example.com/score", valid: true, origin: "http://example.com"},
+		{name: "endpoint with port and query", value: "https://scores.example.com:8443/v1/submit?game=kula", valid: true, origin: "https://scores.example.com:8443"},
+		{name: "ipv6 endpoint", value: "https://[2001:db8::1]:8443/score", valid: true, origin: "https://[2001:db8::1]:8443"},
+		{name: "unsupported scheme", value: "ftp://example.com/score"},
+		{name: "relative endpoint", value: "/score"},
+		{name: "missing host", value: "https:///score"},
+		{name: "credentials", value: "https://user:pass@example.com/score"},
+		{name: "fragment", value: "https://example.com/score#fragment"},
+		{name: "backslash", value: "https://example.com\\@other.example/score"},
+		{name: "csp injection host", value: "https://example.com;script-src/score"},
+		{name: "invalid port", value: "https://example.com:0/score"},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			path := filepath.Join(dir, strings.ReplaceAll(tt.name, " ", "_")+".yaml")
+			yamlData := "global:\n  game_score_url: " + strconv.Quote(tt.value) + "\n"
+			if err := os.WriteFile(path, []byte(yamlData), 0644); err != nil {
+				t.Fatal(err)
+			}
+
+			cfg, err := Load(path)
+			if tt.valid {
+				if err != nil {
+					t.Fatalf("Load() unexpected error: %v", err)
+				}
+				if cfg.Global.GameScoreURL != tt.value {
+					t.Errorf("game_score_url = %q, want %q", cfg.Global.GameScoreURL, tt.value)
+				}
+				origin, err := GameScoreURLOrigin(tt.value)
+				if err != nil {
+					t.Fatalf("GameScoreURLOrigin() unexpected error: %v", err)
+				}
+				if origin != tt.origin {
+					t.Errorf("GameScoreURLOrigin() = %q, want %q", origin, tt.origin)
+				}
+				return
+			}
+			if err == nil {
+				t.Fatal("Load() succeeded for invalid game_score_url")
+			}
+		})
 	}
 }

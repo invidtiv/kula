@@ -19,8 +19,11 @@ perl -i -0777 -pe 's/\n[ \t]*if s\.global\.EasterEgg \{\n.*?\n[ \t]*\}\n/\n/s' "
 perl -i -0777 -pe 's/\nfunc \(s \*Server\) handleGame\(w http\.ResponseWriter, r \*http\.Request\) \{\n.*?\n\}\n//s' "${PROJECT_ROOT}"/internal/web/server.go
 perl -i -0777 -pe 's/\n[ \t]*if !s\.global\.EasterEgg && \(path == "game\.html".*?\n[ \t]*\}\n/\n/s' "${PROJECT_ROOT}"/internal/web/server.go
 
-# remove the game-specific test (asserts on now-removed game.js / game.html)
+# remove game-specific tests that assert on now-removed game.js / game.html
 perl -i -0777 -pe 's/\nfunc TestGameTemplateInjection\(t \*testing\.T\) \{.*?\n\}\n//s' "${PROJECT_ROOT}"/internal/web/server_test.go
+perl -i -0777 -pe 's/\nfunc TestGameScoreURLTemplateAndCSP\(t \*testing\.T\) \{.*?\n\}\n//s' "${PROJECT_ROOT}"/internal/web/server_test.go
+perl -i -0777 -pe 's/\nfunc TestInvalidGameScoreURLIsNotRendered\(t \*testing\.T\) \{.*?\n\}\n//s' "${PROJECT_ROOT}"/internal/web/server_test.go
+perl -i -0777 -pe 's/\nfunc TestGameScoreSubmissionRequestPolicy\(t \*testing\.T\) \{.*?\n\}\n//s' "${PROJECT_ROOT}"/internal/web/server_test.go
 
 # remove game files
 rm -f "${PROJECT_ROOT}"/internal/web/static/game.*

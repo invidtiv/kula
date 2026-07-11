@@ -34,18 +34,20 @@ import (
 var staticFS embed.FS
 
 type Server struct {
-	cfg           config.WebConfig
-	global        config.GlobalConfig
-	collector     *collector.Collector
-	store         *storage.Store
-	auth          *AuthManager
-	hub           *wsHub
-	httpSrv       *http.Server
-	templates     *template.Template
-	sriHashes     map[string]string
-	ollama        *ollamaClient
-	ollamaLimiter *chatRateLimiter
-	ollamaMetaLim *chatRateLimiter
+	cfg             config.WebConfig
+	global          config.GlobalConfig
+	gameScoreURL    string
+	gameScoreOrigin string
+	collector       *collector.Collector
+	store           *storage.Store
+	auth            *AuthManager
+	hub             *wsHub
+	httpSrv         *http.Server
+	templates       *template.Template
+	sriHashes       map[string]string
+	ollama          *ollamaClient
+	ollamaLimiter   *chatRateLimiter
+	ollamaMetaLim   *chatRateLimiter
 
 	wsMu       sync.Mutex
 	wsCount    int
@@ -53,18 +55,29 @@ type Server struct {
 }
 
 func NewServer(cfg config.WebConfig, global config.GlobalConfig, c *collector.Collector, s *storage.Store, storageDir string, ollamaCfg config.OllamaConfig) *Server {
+	gameScoreURL := global.GameScoreURL
+	gameScoreOrigin, err := config.GameScoreURLOrigin(gameScoreURL)
+	if err != nil {
+		// Config loading rejects invalid values. Keep direct Server construction
+		// from turning an invalid value into a CSP or browser fetch target.
+		gameScoreURL = ""
+		gameScoreOrigin = ""
+	}
+
 	srv := &Server{
-		cfg:           cfg,
-		global:        global,
-		collector:     c,
-		store:         s,
-		auth:          NewAuthManager(cfg.Auth, storageDir, cfg.TrustProxy, cfg.Security),
-		hub:           newWSHub(),
-		sriHashes:     make(map[string]string),
-		wsIPCounts:    make(map[string]int),
-		ollama:        newOllamaClient(ollamaCfg),
-		ollamaLimiter: newChatRateLimiter(),
-		ollamaMetaLim: newMetaRateLimiter(),
+		cfg:             cfg,
+		global:          global,
+		gameScoreURL:    gameScoreURL,
+		gameScoreOrigin: gameScoreOrigin,
+		collector:       c,
+		store:           s,
+		auth:            NewAuthManager(cfg.Auth, storageDir, cfg.TrustProxy, cfg.Security),
+		hub:             newWSHub(),
+		sriHashes:       make(map[string]string),
+		wsIPCounts:      make(map[string]int),
+		ollama:          newOllamaClient(ollamaCfg),
+		ollamaLimiter:   newChatRateLimiter(),
+		ollamaMetaLim:   newMetaRateLimiter(),
 	}
 	srv.initializeTemplates()
 	srv.calculateSRIs()
@@ -228,6 +241,9 @@ func (s *Server) securityMiddleware(next http.Handler) http.Handler {
 			csp := fmt.Sprintf("default-src 'self'; script-src 'self' 'nonce-%s'; style-src 'self' 'unsafe-inline';", nonce)
 			if s.cfg.Security.FrameProtection {
 				csp += " frame-ancestors 'none';"
+			}
+			if s.gameScoreOrigin != "" {
+				csp += fmt.Sprintf(" connect-src 'self' %s;", s.gameScoreOrigin)
 			}
 			w.Header().Set("Content-Security-Policy", csp)
 			w.Header().Set("Referrer-Policy", "strict-origin-when-cross-origin")
@@ -1148,19 +1164,21 @@ func (s *Server) renderTemplate(w http.ResponseWriter, r *http.Request, template
 	}
 
 	data := struct {
-		Nonce       string
-		SRI         map[string]string
-		AuthEnabled bool
-		LangForce   bool
-		EasterEgg   bool
-		BasePath    string
+		Nonce        string
+		SRI          map[string]string
+		AuthEnabled  bool
+		LangForce    bool
+		EasterEgg    bool
+		BasePath     string
+		GameScoreURL string
 	}{
-		Nonce:       nonce,
-		SRI:         s.sriHashes,
-		AuthEnabled: s.cfg.Auth.Enabled,
-		LangForce:   s.cfg.Lang.Force,
-		EasterEgg:   s.global.EasterEgg,
-		BasePath:    s.cfg.BasePath,
+		Nonce:        nonce,
+		SRI:          s.sriHashes,
+		AuthEnabled:  s.cfg.Auth.Enabled,
+		LangForce:    s.cfg.Lang.Force,
+		EasterEgg:    s.global.EasterEgg,
+		BasePath:     s.cfg.BasePath,
+		GameScoreURL: s.gameScoreURL,
 	}
 
 	w.Header().Set("Content-Type", "text/html; charset=utf-8")

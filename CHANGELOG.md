@@ -7,6 +7,12 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 Types of changes: Added, Changed, Deprecated, Removed, Fixed, Security
 
+## [0.18.6] - 2026-07-11
+
+### Added
+
+- New config option: game_score_url
+
 ## [0.18.5] - 2026-07-10
 
 ### Changed
